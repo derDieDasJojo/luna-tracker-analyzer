@@ -15,11 +15,7 @@ function analyzeJson() {
         const data = JSON.parse(rawData);
 
         // Format the data and display in text
-        let formattedText = data.map(item => {
-            const date = new Date(item.time * 1000);
-            const formattedDate = date.toLocaleDateString("de-DE") + " " + date.toLocaleTimeString("de-DE", { hour: '2-digit', minute: '2-digit' });
-            return `Time: ${formattedDate}, Type: ${item.type}, Signature: ${item.signature}`;
-        }).join("<br>");
+        let formattedText = formatBreastfeedingEvents(data);
         formattedTextDiv.innerHTML = formattedText;
 
         // Initialize data structures for charts
@@ -107,4 +103,44 @@ function analyzeJson() {
     } catch (e) {
         alert("Invalid JSON. Please check your input.");
     }
+}
+
+// Function to process and format breastfeeding events
+function formatBreastfeedingEvents(data) {
+    const events = data.filter(item => item.type.startsWith("BREASTFEEDING"));
+    let formattedEvents = "";
+    let previousEndTime = null;
+    let currentDate = null;
+
+    for (let i = 0; i < events.length; i++) {
+        const event = events[i];
+        const nextEvent = events[i + 1];
+        const startTime = new Date(event.time * 1000);
+        const endTime = nextEvent ? new Date(nextEvent.time * 1000) : null;
+
+        // Write the date if it's different from the current date
+        if (startTime.toDateString() !== currentDate) {
+            currentDate = startTime.toDateString();
+            formattedEvents += `${currentDate}\n`;
+            previousEndTime = null; // Reset previous end time for new date
+        }
+
+        // Check if there is a gap of more than 1 hour
+        if (previousEndTime && (startTime - previousEndTime) > 3600000) {
+            formattedEvents += "\n"; // Add a blank line for a large gap
+        }
+
+        // Format the event
+        const type = event.type === "BREASTFEEDING_RIGHT_NIPPLE" ? "r" : 
+                     event.type === "BREASTFEEDING_LEFT_NIPPLE" ? "l" : "";
+        formattedEvents += `${type}:${startTime.toLocaleTimeString("de-DE", { hour: '2-digit', minute: '2-digit' })}`;
+        if (endTime) {
+            formattedEvents += ` - ${endTime.toLocaleTimeString("de-DE", { hour: '2-digit', minute: '2-digit' })}`;
+        }
+        formattedEvents += "\n";
+
+        previousEndTime = startTime; // Update the previous end time
+    }
+
+    return formattedEvents;
 }
