@@ -39,6 +39,7 @@ function processData(rawData, formattedTextDiv, tableBody, breastfeedingChartCtx
         // Initialize data structures for charts
         const breastfeedingPerDay = {};
         const breastfeedingPerHour = {};
+        const breastfeedingPerDayPerHour = {};
 
         data.forEach(item => {
             const date = new Date(item.time * 1000);
@@ -62,6 +63,15 @@ function processData(rawData, formattedTextDiv, tableBody, breastfeedingChartCtx
                     breastfeedingPerHour[hour] = 0;
                 }
                 breastfeedingPerHour[hour]++;
+
+                // New data structure for daily hourly patterns
+                if (!breastfeedingPerDayPerHour[formattedDate]) {
+                    breastfeedingPerDayPerHour[formattedDate] = {};
+                }
+                if (!breastfeedingPerDayPerHour[formattedDate][hour]) {
+                    breastfeedingPerDayPerHour[formattedDate][hour] = 0;
+                }
+                breastfeedingPerDayPerHour[formattedDate][hour]++;
             }
         });
 
@@ -91,7 +101,7 @@ function processData(rawData, formattedTextDiv, tableBody, breastfeedingChartCtx
             }
         });
 
-        // Create Breastfeeding Times Chart (Occurrences per Hour)
+        // Create Breastfeeding Times Chart (Occurrences per Hour - Aggregated)
         const hours = Array.from({ length: 24 }, (_, i) => i); // 0 to 23 hours
         const breastfeedingHourlyCounts = hours.map(hour => breastfeedingPerHour[hour] || 0);
 
@@ -100,7 +110,7 @@ function processData(rawData, formattedTextDiv, tableBody, breastfeedingChartCtx
             data: {
                 labels: hours.map(h => h + ":00"),
                 datasets: [{
-                    label: 'Breastfeeding Occurrences per Hour',
+                    label: 'Breastfeeding Occurrences per Hour (All Days)',
                     data: breastfeedingHourlyCounts,
                     backgroundColor: 'rgba(153, 102, 255, 0.6)',
                     borderColor: 'rgba(153, 102, 255, 1)',
@@ -114,6 +124,70 @@ function processData(rawData, formattedTextDiv, tableBody, breastfeedingChartCtx
                     y: {
                         beginAtZero: true
                     }
+                }
+            }
+        });
+
+        // Create Daily Breastfeeding Patterns Chart
+        const dailyPatternsChartCtx = document.getElementById("dailyPatternsChart").getContext("2d");
+        const dates = Object.keys(breastfeedingPerDayPerHour).sort();
+        const colors = [
+            'rgba(255, 99, 132, 1)', 'rgba(54, 162, 235, 1)', 'rgba(255, 205, 86, 1)',
+            'rgba(75, 192, 192, 1)', 'rgba(153, 102, 255, 1)', 'rgba(255, 159, 64, 1)',
+            'rgba(199, 199, 199, 1)', 'rgba(83, 102, 255, 1)', 'rgba(255, 99, 255, 1)',
+            'rgba(99, 255, 132, 1)', 'rgba(255, 132, 99, 1)', 'rgba(132, 99, 255, 1)',
+            'rgba(255, 255, 99, 1)', 'rgba(99, 255, 255, 1)'
+        ];
+
+        const datasets = dates.map((date, index) => {
+            const hourlyData = hours.map(hour => breastfeedingPerDayPerHour[date][hour] || 0);
+            return {
+                label: date,
+                data: hourlyData,
+                borderColor: colors[index % colors.length],
+                backgroundColor: colors[index % colors.length].replace('1)', '0.1)'),
+                borderWidth: 2,
+                fill: false,
+                tension: 0.4
+            };
+        });
+
+        new Chart(dailyPatternsChartCtx, {
+            type: 'line',
+            data: {
+                labels: hours.map(h => h + ":00"),
+                datasets: datasets
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    title: {
+                        display: true,
+                        text: 'Daily Breastfeeding Patterns (Occurrences per Hour by Day)'
+                    },
+                    legend: {
+                        display: true,
+                        position: 'top'
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Number of Breastfeeding Events'
+                        }
+                    },
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Hour of Day'
+                        }
+                    }
+                },
+                interaction: {
+                    mode: 'index',
+                    intersect: false
                 }
             }
         });
