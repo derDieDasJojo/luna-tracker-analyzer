@@ -1,0 +1,17 @@
+[
+    {
+        "time": 1700000000,
+        "type": "BREASTFEEDING_LEFT_NIPPLE",
+        "signature": "test1"
+    },
+    {
+        "time": 1700003600,
+        "type": "BREASTFEEDING_RIGHT_NIPPLE",
+        "signature": "test2"
+    },
+    {
+        "time": 1700007200,
+        "type": "DIAPER_CHANGE",
+        "signature": "test3"
+    }
+]

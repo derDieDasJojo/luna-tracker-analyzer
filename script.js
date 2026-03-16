@@ -1,5 +1,6 @@
 function analyzeJson() {
     const textArea = document.getElementById("jsonInput");
+    const fileInput = document.getElementById("jsonFile");
     const formattedTextDiv = document.getElementById("formattedText");
     const tableBody = document.getElementById("dataTable").getElementsByTagName("tbody")[0];
     const breastfeedingChartCtx = document.getElementById("breastfeedingChart").getContext("2d");
@@ -9,8 +10,25 @@ function analyzeJson() {
     formattedTextDiv.innerHTML = "";
     tableBody.innerHTML = "";
 
-    const rawData = textArea.value;
+    let rawData = textArea.value;
 
+    // If a file is selected, read it
+    if (fileInput.files.length > 0) {
+        const file = fileInput.files[0];
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            rawData = e.target.result;
+            processData(rawData, formattedTextDiv, tableBody, breastfeedingChartCtx, breastfeedingTimesChartCtx);
+        };
+        reader.readAsText(file);
+        return; // Exit early, processing will happen in onload
+    }
+
+    // If no file, use textarea content
+    processData(rawData, formattedTextDiv, tableBody, breastfeedingChartCtx, breastfeedingTimesChartCtx);
+}
+
+function processData(rawData, formattedTextDiv, tableBody, breastfeedingChartCtx, breastfeedingTimesChartCtx) {
     try {
         const data = JSON.parse(rawData);
 

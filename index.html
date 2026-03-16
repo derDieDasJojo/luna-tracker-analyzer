@@ -52,8 +52,11 @@
 
 <body>
     <h1>Luna Tracker Analyzer</h1>
-    <p>Paste your JSON data below and click "Analyze" to see the results:</p>
+    <p>Paste your JSON data below or upload a JSON file and click "Analyze" to see the results:</p>
     <textarea id="jsonInput" placeholder="Enter JSON here..."></textarea>
+    <br>
+    <input type="file" id="jsonFile" accept=".json">
+    <br>
     <button onclick="analyzeJson()">Analyze</button>
 
     <h2>Formatted Text</h2>
