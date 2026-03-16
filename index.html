@@ -8,79 +8,344 @@
     <!-- Add library for charts -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
         body {
-            font-family: Arial, sans-serif;
-            margin: 20px;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .header h1 {
+            color: #4a5568;
+            font-size: 2.5rem;
+            font-weight: 700;
+        }
+
+        .nav-menu {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
+        .nav-btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        .nav-btn:hover {
+            background: #5a67d8;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .nav-btn.active {
+            background: #4c51bf;
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .input-section {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.5s ease, padding 0.5s ease;
+        }
+
+        .input-section.expanded {
+            max-height: 500px;
+            padding: 20px;
+        }
+
+        .input-toggle {
+            background: #48bb78;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(72, 187, 120, 0.3);
+            margin-bottom: 15px;
+        }
+
+        .input-toggle:hover {
+            background: #38a169;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(72, 187, 120, 0.4);
+        }
+
+        .input-section p {
+            color: #4a5568;
+            margin-bottom: 15px;
+            font-size: 16px;
         }
 
         textarea {
             width: 100%;
             height: 200px;
+            border: 2px solid #e2e8f0;
+            border-radius: 10px;
+            padding: 15px;
+            font-size: 14px;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            resize: vertical;
+            transition: border-color 0.3s ease;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        input[type="file"] {
+            margin: 10px 0;
+            padding: 10px;
+            border: 2px solid #e2e8f0;
+            border-radius: 10px;
+            width: 100%;
+            transition: border-color 0.3s ease;
+        }
+
+        input[type="file"]:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
         }
 
         button {
-            margin-top: 10px;
-            padding: 10px 15px;
+            margin-top: 15px;
+            padding: 12px 30px;
             font-size: 16px;
+            font-weight: 600;
             cursor: pointer;
+            border: none;
+            border-radius: 25px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .content-section {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            display: none;
+        }
+
+        .content-section.active {
+            display: block;
+        }
+
+        .content-section h2 {
+            color: #2d3748;
+            margin-bottom: 20px;
+            font-size: 1.8rem;
+            font-weight: 600;
+            border-bottom: 3px solid #667eea;
+            padding-bottom: 10px;
         }
 
         canvas {
-            margin-top: 20px;
+            max-width: 100%;
+            height: auto;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
         }
 
         table {
             width: 100%;
             border-collapse: collapse;
             margin-top: 20px;
+            background: white;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
         }
 
         table, th, td {
-            border: 1px solid black;
+            border: 1px solid #e2e8f0;
         }
 
         th, td {
-            padding: 8px;
+            padding: 12px 15px;
             text-align: left;
         }
 
         th {
-            background-color: #f4f4f4;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            font-weight: 600;
+        }
+
+        tr:nth-child(even) {
+            background: #f8fafc;
+        }
+
+        tr:hover {
+            background: #edf2f7;
+        }
+
+        #formattedText {
+            background: #f8fafc;
+            padding: 20px;
+            border-radius: 10px;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            white-space: pre-wrap;
+            line-height: 1.6;
+            border: 1px solid #e2e8f0;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        @media (max-width: 768px) {
+            .header {
+                flex-direction: column;
+                gap: 15px;
+                text-align: center;
+            }
+
+            .nav-menu {
+                justify-content: center;
+            }
+
+            .container {
+                padding: 10px;
+            }
+
+            .header h1 {
+                font-size: 2rem;
+            }
         }
     </style>
 </head>
 
 <body>
-    <h1>Luna Tracker Analyzer</h1>
-    <p>Paste your JSON data below or upload a JSON file and click "Analyze" to see the results:</p>
-    <textarea id="jsonInput" placeholder="Enter JSON here..."></textarea>
-    <br>
-    <input type="file" id="jsonFile" accept=".json">
-    <br>
-    <button onclick="analyzeJson()">Analyze</button>
+    <div class="container">
+        <div class="header">
+            <h1>Luna Tracker Analyzer</h1>
+            <div class="nav-menu">
+                <button class="nav-btn active" onclick="showSection('charts')">Charts</button>
+                <button class="nav-btn" onclick="showSection('table')">Data Table</button>
+                <button class="nav-btn" onclick="showSection('text')">Formatted Text</button>
+                <button class="input-toggle" onclick="toggleInput()">📝 Input Data</button>
+            </div>
+        </div>
 
-    <h2>Formatted Text</h2>
-    <div id="formattedText"></div>
+        <div class="input-section" id="inputSection">
+            <p>Paste your JSON data below or upload a JSON file and click "Analyze" to see the results:</p>
+            <textarea id="jsonInput" placeholder="Enter JSON here..."></textarea>
+            <br>
+            <input type="file" id="jsonFile" accept=".json">
+            <br>
+            <button onclick="analyzeJson()">Analyze Data</button>
+        </div>
 
-    <h2>Chart: Breastfeeding Occurrences per Day</h2>
-    <canvas id="breastfeedingChart"></canvas>
+        <div id="chartsSection" class="content-section active">
+            <h2>📊 Breastfeeding Charts</h2>
+            <div>
+                <h3>Occurrences per Day</h3>
+                <canvas id="breastfeedingChart"></canvas>
+            </div>
+            <div style="margin-top: 30px;">
+                <h3>Occurrences per Hour</h3>
+                <canvas id="breastfeedingTimesChart"></canvas>
+            </div>
+        </div>
 
-    <h2>Chart: Breastfeeding Occurrences per Hour</h2>
-    <canvas id="breastfeedingTimesChart"></canvas>
+        <div id="tableSection" class="content-section">
+            <h2>📋 All Data Entries</h2>
+            <table id="dataTable">
+                <thead>
+                    <tr>
+                        <th>Time</th>
+                        <th>Type</th>
+                        <th>Signature</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
 
-    <h2>Other Data (Table)</h2>
-    <table id="dataTable">
-        <thead>
-            <tr>
-                <th>Time</th>
-                <th>Type</th>
-                <th>Signature</th>
-            </tr>
-        </thead>
-        <tbody></tbody>
-    </table>
+        <div id="textSection" class="content-section">
+            <h2>📝 Formatted Breastfeeding Events</h2>
+            <div id="formattedText"></div>
+        </div>
+    </div>
 
     <script src="script.js"></script>
+    <script>
+        function showSection(sectionName) {
+            // Hide all sections
+            document.querySelectorAll('.content-section').forEach(section => {
+                section.classList.remove('active');
+            });
+
+            // Remove active class from all nav buttons
+            document.querySelectorAll('.nav-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+
+            // Show selected section
+            document.getElementById(sectionName + 'Section').classList.add('active');
+
+            // Add active class to clicked button
+            event.target.classList.add('active');
+        }
+
+        function toggleInput() {
+            const inputSection = document.getElementById('inputSection');
+            inputSection.classList.toggle('expanded');
+        }
+    </script>
 </body>
 
 </html>
