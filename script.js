@@ -125,7 +125,7 @@ function processData(rawData, formattedTextDiv, tableBody, breastfeedingChartCtx
 
 // Function to process and format breastfeeding events
 function formatBreastfeedingEvents(data) {
-    const events = data.filter(item => item.type.startsWith("BREASTFEEDING"));
+    const events = data.filter(item => item.type.startsWith("BREASTFEEDING")).sort((a, b) => a.time - b.time);
     let formattedEvents = "";
     let previousEndTime = null;
     let currentDate = null;
