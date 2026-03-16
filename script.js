@@ -45,6 +45,12 @@ function processData(rawData, formattedTextDiv, tableBody, breastfeedingChartCtx
             const formattedDate = date.toLocaleDateString("de-DE");
             const hour = date.getHours();
 
+            // Populate table with all data types
+            const row = tableBody.insertRow();
+            row.insertCell(0).textContent = date.toLocaleDateString("de-DE") + " " + date.toLocaleTimeString("de-DE", { hour: '2-digit', minute: '2-digit' });
+            row.insertCell(1).textContent = item.type;
+            row.insertCell(2).textContent = item.signature;
+
             // Conditions for Breastfeeding Chart Data
             if (item.type === "BREASTFEEDING_LEFT_NIPPLE" || item.type === "BREASTFEEDING_RIGHT_NIPPLE") {
                 if (!breastfeedingPerDay[formattedDate]) {
@@ -56,12 +62,6 @@ function processData(rawData, formattedTextDiv, tableBody, breastfeedingChartCtx
                     breastfeedingPerHour[hour] = 0;
                 }
                 breastfeedingPerHour[hour]++;
-            } else {
-                // Populate table with other data types
-                const row = tableBody.insertRow();
-                row.insertCell(0).textContent = date.toLocaleDateString("de-DE") + " " + date.toLocaleTimeString("de-DE", { hour: '2-digit', minute: '2-digit' });
-                row.insertCell(1).textContent = item.type;
-                row.insertCell(2).textContent = item.signature;
             }
         });
 
