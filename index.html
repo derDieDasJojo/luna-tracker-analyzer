@@ -246,6 +246,18 @@
             overflow-y: auto;
         }
 
+        #formattedSleepText {
+            background: #f8fafc;
+            padding: 20px;
+            border-radius: 10px;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            white-space: pre-wrap;
+            line-height: 1.6;
+            border: 1px solid #e2e8f0;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
         @media (max-width: 768px) {
             .header {
                 flex-direction: column;
@@ -274,6 +286,7 @@
             <h1>Luna Tracker Analyzer</h1>
             <div class="nav-menu">
                 <button class="nav-btn active" onclick="showSection('charts')">Charts</button>
+                <button class="nav-btn" onclick="showSection('sleep')">Sleep</button>
                 <button class="nav-btn" onclick="showSection('table')">Data Table</button>
                 <button class="nav-btn" onclick="showSection('text')">Formatted Text</button>
                 <button class="input-toggle" onclick="toggleInput()">📝 Input Data</button>
@@ -302,6 +315,22 @@
             <div style="margin-top: 30px;">
                 <h3>Daily Patterns: Breastfeeding per Hour by Day</h3>
                 <canvas id="dailyPatternsChart"></canvas>
+            </div>
+        </div>
+
+        <div id="sleepSection" class="content-section">
+            <h2>😴 Sleep Analysis</h2>
+            <div>
+                <h3>Sleep Status per Day (1 = Sleeping, 0 = Awake)</h3>
+                <canvas id="sleepStatusChart"></canvas>
+            </div>
+            <div style="margin-top: 30px;">
+                <h3>Accumulated Sleep Time per Day</h3>
+                <canvas id="accumulatedSleepChart"></canvas>
+            </div>
+            <div style="margin-top: 30px;">
+                <h2>Sleep Sessions</h2>
+                <div id="formattedSleepText"></div>
             </div>
         </div>
 

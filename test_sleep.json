@@ -1,0 +1,52 @@
+[
+    {
+        "time": 1700000000,
+        "type": "note",
+        "notes": "schläft"
+    },
+    {
+        "time": 1700010000,
+        "type": "note",
+        "notes": "wach"
+    },
+    {
+        "time": 1700020000,
+        "type": "note",
+        "notes": "schläft"
+    },
+    {
+        "time": 1700030000,
+        "type": "note",
+        "notes": "wach"
+    },
+    {
+        "time": 1700050000,
+        "type": "note",
+        "notes": "schläft"
+    },
+    {
+        "time": 1700070000,
+        "type": "note",
+        "notes": "wach"
+    },
+    {
+        "time": 1700086400,
+        "type": "note",
+        "notes": "schläft"
+    },
+    {
+        "time": 1700100000,
+        "type": "note",
+        "notes": "wach"
+    },
+    {
+        "time": 1700110000,
+        "type": "note",
+        "notes": "schläft"
+    },
+    {
+        "time": 1700120000,
+        "type": "note",
+        "notes": "wach"
+    }
+]
