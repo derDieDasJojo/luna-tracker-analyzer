@@ -416,3 +416,226 @@ function formatSleepSessions(sleepSessionsByDate) {
 
     return `<pre style="white-space: pre-wrap; word-wrap: break-word;">${formattedSessions}</pre>`;
 }
+
+// ── Secure credential storage (localStorage + Web Crypto AES-256-GCM) ─────────
+//
+// Security model: the password is encrypted with AES-256-GCM before being
+// stored in localStorage.  Because this is a purely client-side app there is
+// no server-side secret, so the encryption key is stored alongside the
+// ciphertext.  This means a determined attacker with DevTools access can
+// recover the password; the goal is protection against:
+//   • casual localStorage inspection / browser history exports
+//   • the password appearing in plaintext in bug reports or screenshots
+//   • the old cookie approach which sent credentials with every HTTP request
+
+const STORAGE_KEY_URL      = "webdav_url";
+const STORAGE_KEY_USERNAME = "webdav_username";
+const STORAGE_KEY_FILEPATH = "webdav_filepath";
+const STORAGE_KEY_ENC_PWD  = "webdav_enc_password";
+const STORAGE_KEY_ENC_KEY  = "webdav_enc_key";
+const STORAGE_KEY_ENC_IV   = "webdav_enc_iv";
+
+// Legacy cookie names – used only to migrate and then erase old plaintext cookies
+const LEGACY_COOKIE_NAMES = ["webdav_url", "webdav_username", "webdav_password", "webdav_filepath"];
+
+function _bufToBase64(buf) {
+    return btoa(String.fromCharCode(...new Uint8Array(buf)));
+}
+
+function _base64ToBuf(b64) {
+    return Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+}
+
+async function encryptPassword(password) {
+    const key = await crypto.subtle.generateKey(
+        { name: "AES-GCM", length: 256 },
+        true,
+        ["encrypt", "decrypt"]
+    );
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const cipherBuf = await crypto.subtle.encrypt(
+        { name: "AES-GCM", iv },
+        key,
+        new TextEncoder().encode(password)
+    );
+    const rawKey = await crypto.subtle.exportKey("raw", key);
+    return {
+        ciphertext: _bufToBase64(cipherBuf),
+        key:        _bufToBase64(rawKey),
+        iv:         _bufToBase64(iv)
+    };
+}
+
+async function decryptPassword(ciphertext, keyB64, ivB64) {
+    const key = await crypto.subtle.importKey(
+        "raw",
+        _base64ToBuf(keyB64),
+        { name: "AES-GCM" },
+        false,
+        ["decrypt"]
+    );
+    const plainBuf = await crypto.subtle.decrypt(
+        { name: "AES-GCM", iv: _base64ToBuf(ivB64) },
+        key,
+        _base64ToBuf(ciphertext)
+    );
+    return new TextDecoder().decode(plainBuf);
+}
+
+// ── WebDAV / Nextcloud helpers ────────────────────────────────────────────────
+
+async function saveWebDavCredentials(serverUrl, username, password, filePath) {
+    localStorage.setItem(STORAGE_KEY_URL,      serverUrl);
+    localStorage.setItem(STORAGE_KEY_USERNAME, username);
+    localStorage.setItem(STORAGE_KEY_FILEPATH, filePath);
+
+    const { ciphertext, key, iv } = await encryptPassword(password);
+    localStorage.setItem(STORAGE_KEY_ENC_PWD, ciphertext);
+    localStorage.setItem(STORAGE_KEY_ENC_KEY, key);
+    localStorage.setItem(STORAGE_KEY_ENC_IV,  iv);
+}
+
+function clearWebDavCredentials() {
+    [STORAGE_KEY_URL, STORAGE_KEY_USERNAME, STORAGE_KEY_FILEPATH,
+     STORAGE_KEY_ENC_PWD, STORAGE_KEY_ENC_KEY, STORAGE_KEY_ENC_IV
+    ].forEach(k => localStorage.removeItem(k));
+}
+
+function _clearLegacyCookies() {
+    LEGACY_COOKIE_NAMES.forEach(name => {
+        document.cookie = `${encodeURIComponent(name)}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; SameSite=Strict`;
+    });
+}
+
+async function loadWebDavCredentials() {
+    // Erase any plaintext cookies left over from the previous implementation
+    _clearLegacyCookies();
+
+    const url      = localStorage.getItem(STORAGE_KEY_URL)      || "";
+    const username = localStorage.getItem(STORAGE_KEY_USERNAME) || "";
+    const filePath = localStorage.getItem(STORAGE_KEY_FILEPATH) || "";
+    const encPwd   = localStorage.getItem(STORAGE_KEY_ENC_PWD);
+    const encKey   = localStorage.getItem(STORAGE_KEY_ENC_KEY);
+    const encIv    = localStorage.getItem(STORAGE_KEY_ENC_IV);
+
+    if (!url && !username && !filePath) return;
+
+    document.getElementById("webdavUrl").value      = url;
+    document.getElementById("webdavUsername").value = username;
+    document.getElementById("webdavFilePath").value = filePath;
+    document.getElementById("webdavRemember").checked = true;
+
+    if (encPwd && encKey && encIv) {
+        try {
+            const password = await decryptPassword(encPwd, encKey, encIv);
+            document.getElementById("webdavPassword").value = password;
+        } catch (err) {
+            // Decryption failed (e.g. storage was tampered with) – leave field empty
+            console.error("WebDAV: failed to decrypt stored password:", err);
+        }
+    }
+}
+
+function setWebDavStatus(message, type) {
+    const el = document.getElementById("webdavStatus");
+    el.textContent = message;
+    el.className = "webdav-status " + type;
+}
+
+async function fetchFromNextcloud() {
+    const serverUrl = document.getElementById("webdavUrl").value.trim().replace(/\/+$/, "");
+    const username  = document.getElementById("webdavUsername").value.trim();
+    const password  = document.getElementById("webdavPassword").value;
+    const filePath  = document.getElementById("webdavFilePath").value.trim().replace(/^\/+/, "");
+    const remember  = document.getElementById("webdavRemember").checked;
+
+    if (!serverUrl || !username || !password || !filePath) {
+        setWebDavStatus("Please fill in all Nextcloud connection fields.", "error");
+        return;
+    }
+
+    // Only allow HTTPS to prevent credentials being sent in plaintext
+    if (!serverUrl.startsWith("https://")) {
+        setWebDavStatus("Only HTTPS Nextcloud URLs are supported to protect your credentials.", "error");
+        return;
+    }
+
+    if (remember) {
+        await saveWebDavCredentials(serverUrl, username, password, filePath);
+    } else {
+        clearWebDavCredentials();
+    }
+
+    // RFC 7617: the username must not contain a colon
+    if (username.includes(":")) {
+        setWebDavStatus("Username must not contain a colon character.", "error");
+        return;
+    }
+
+    const encodedFilePath = filePath.split("/").map(encodeURIComponent).join("/");
+    const webdavUrl = `${serverUrl}/remote.php/dav/files/${encodeURIComponent(username)}/${encodedFilePath}`;
+
+    // btoa only handles Latin-1; encode non-ASCII chars first so the
+    // Authorization header is well-formed for any username/password.
+    const credentials = btoa(
+        unescape(encodeURIComponent(username)) + ":" + unescape(encodeURIComponent(password))
+    );
+
+    setWebDavStatus("Fetching file from Nextcloud…", "loading");
+
+    try {
+        const response = await fetch(webdavUrl, {
+            method: "GET",
+            credentials: "omit",
+            headers: {
+                "Authorization": `Basic ${credentials}`
+            }
+        });
+
+        if (!response.ok) {
+            setWebDavStatus(
+                `Failed to fetch file: ${response.status} ${response.statusText}. ` +
+                "Check URL, credentials and file path. " +
+                "Also make sure your Nextcloud server allows CORS requests from this origin.",
+                "error"
+            );
+            return;
+        }
+
+        const rawData = await response.text();
+
+        const formattedTextDiv       = document.getElementById("formattedText");
+        const tableBody              = document.getElementById("dataTable").getElementsByTagName("tbody")[0];
+        const breastfeedingChartCtx  = document.getElementById("breastfeedingChart").getContext("2d");
+        const breastfeedingTimesCtx  = document.getElementById("breastfeedingTimesChart").getContext("2d");
+        const sleepStatusChartCtx    = document.getElementById("sleepStatusChart").getContext("2d");
+        const accumulatedSleepCtx    = document.getElementById("accumulatedSleepChart").getContext("2d");
+        const formattedSleepTextDiv  = document.getElementById("formattedSleepText");
+
+        formattedTextDiv.innerHTML      = "";
+        tableBody.innerHTML             = "";
+        formattedSleepTextDiv.innerHTML = "";
+
+        processData(
+            rawData,
+            formattedTextDiv,
+            tableBody,
+            breastfeedingChartCtx,
+            breastfeedingTimesCtx,
+            sleepStatusChartCtx,
+            accumulatedSleepCtx,
+            formattedSleepTextDiv
+        );
+
+        setWebDavStatus("File fetched and analyzed successfully.", "success");
+    } catch (err) {
+        setWebDavStatus(
+            `Error fetching from Nextcloud: ${err.message}. ` +
+            "Make sure your Nextcloud server allows CORS requests from this page.",
+            "error"
+        );
+    }
+}
+
+// Auto-load saved WebDAV connection on page load
+document.addEventListener("DOMContentLoaded", loadWebDavCredentials);
