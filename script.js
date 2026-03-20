@@ -417,63 +417,122 @@ function formatSleepSessions(sleepSessionsByDate) {
     return `<pre style="white-space: pre-wrap; word-wrap: break-word;">${formattedSessions}</pre>`;
 }
 
-// ── Cookie utilities ──────────────────────────────────────────────────────────
+// ── Secure credential storage (localStorage + Web Crypto AES-256-GCM) ─────────
+//
+// Security model: the password is encrypted with AES-256-GCM before being
+// stored in localStorage.  Because this is a purely client-side app there is
+// no server-side secret, so the encryption key is stored alongside the
+// ciphertext.  This means a determined attacker with DevTools access can
+// recover the password; the goal is protection against:
+//   • casual localStorage inspection / browser history exports
+//   • the password appearing in plaintext in bug reports or screenshots
+//   • the old cookie approach which sent credentials with every HTTP request
 
-function setCookie(name, value, days) {
-    // 864e5 = milliseconds per day (24 * 60 * 60 * 1000)
-    const expires = new Date(Date.now() + days * 864e5).toUTCString();
-    document.cookie = `${encodeURIComponent(name)}=${encodeURIComponent(value)}; expires=${expires}; path=/; SameSite=Strict`;
+const STORAGE_KEY_URL      = "webdav_url";
+const STORAGE_KEY_USERNAME = "webdav_username";
+const STORAGE_KEY_FILEPATH = "webdav_filepath";
+const STORAGE_KEY_ENC_PWD  = "webdav_enc_password";
+const STORAGE_KEY_ENC_KEY  = "webdav_enc_key";
+const STORAGE_KEY_ENC_IV   = "webdav_enc_iv";
+
+// Legacy cookie names – used only to migrate and then erase old plaintext cookies
+const LEGACY_COOKIE_NAMES = ["webdav_url", "webdav_username", "webdav_password", "webdav_filepath"];
+
+function _bufToBase64(buf) {
+    return btoa(String.fromCharCode(...new Uint8Array(buf)));
 }
 
-function getCookie(name) {
-    const prefix = encodeURIComponent(name) + "=";
-    for (const part of document.cookie.split(";")) {
-        const trimmed = part.trim();
-        if (trimmed.startsWith(prefix)) {
-            return decodeURIComponent(trimmed.slice(prefix.length));
-        }
-    }
-    return "";
+function _base64ToBuf(b64) {
+    return Uint8Array.from(atob(b64), c => c.charCodeAt(0));
 }
 
-function deleteCookie(name) {
-    document.cookie = `${encodeURIComponent(name)}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; SameSite=Strict`;
+async function encryptPassword(password) {
+    const key = await crypto.subtle.generateKey(
+        { name: "AES-GCM", length: 256 },
+        true,
+        ["encrypt", "decrypt"]
+    );
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const cipherBuf = await crypto.subtle.encrypt(
+        { name: "AES-GCM", iv },
+        key,
+        new TextEncoder().encode(password)
+    );
+    const rawKey = await crypto.subtle.exportKey("raw", key);
+    return {
+        ciphertext: _bufToBase64(cipherBuf),
+        key:        _bufToBase64(rawKey),
+        iv:         _bufToBase64(iv)
+    };
+}
+
+async function decryptPassword(ciphertext, keyB64, ivB64) {
+    const key = await crypto.subtle.importKey(
+        "raw",
+        _base64ToBuf(keyB64),
+        { name: "AES-GCM" },
+        false,
+        ["decrypt"]
+    );
+    const plainBuf = await crypto.subtle.decrypt(
+        { name: "AES-GCM", iv: _base64ToBuf(ivB64) },
+        key,
+        _base64ToBuf(ciphertext)
+    );
+    return new TextDecoder().decode(plainBuf);
 }
 
 // ── WebDAV / Nextcloud helpers ────────────────────────────────────────────────
 
-const WEBDAV_COOKIE_DAYS = 30;
-const WEBDAV_COOKIE_URL      = "webdav_url";
-const WEBDAV_COOKIE_USERNAME = "webdav_username";
-const WEBDAV_COOKIE_PASSWORD = "webdav_password";
-const WEBDAV_COOKIE_FILEPATH = "webdav_filepath";
+async function saveWebDavCredentials(serverUrl, username, password, filePath) {
+    localStorage.setItem(STORAGE_KEY_URL,      serverUrl);
+    localStorage.setItem(STORAGE_KEY_USERNAME, username);
+    localStorage.setItem(STORAGE_KEY_FILEPATH, filePath);
 
-function saveWebDavCookies(serverUrl, username, password, filePath) {
-    setCookie(WEBDAV_COOKIE_URL,      serverUrl, WEBDAV_COOKIE_DAYS);
-    setCookie(WEBDAV_COOKIE_USERNAME, username,  WEBDAV_COOKIE_DAYS);
-    setCookie(WEBDAV_COOKIE_PASSWORD, password,  WEBDAV_COOKIE_DAYS);
-    setCookie(WEBDAV_COOKIE_FILEPATH, filePath,  WEBDAV_COOKIE_DAYS);
+    const { ciphertext, key, iv } = await encryptPassword(password);
+    localStorage.setItem(STORAGE_KEY_ENC_PWD, ciphertext);
+    localStorage.setItem(STORAGE_KEY_ENC_KEY, key);
+    localStorage.setItem(STORAGE_KEY_ENC_IV,  iv);
 }
 
-function clearWebDavCookies() {
-    deleteCookie(WEBDAV_COOKIE_URL);
-    deleteCookie(WEBDAV_COOKIE_USERNAME);
-    deleteCookie(WEBDAV_COOKIE_PASSWORD);
-    deleteCookie(WEBDAV_COOKIE_FILEPATH);
+function clearWebDavCredentials() {
+    [STORAGE_KEY_URL, STORAGE_KEY_USERNAME, STORAGE_KEY_FILEPATH,
+     STORAGE_KEY_ENC_PWD, STORAGE_KEY_ENC_KEY, STORAGE_KEY_ENC_IV
+    ].forEach(k => localStorage.removeItem(k));
 }
 
-function loadWebDavCookies() {
-    const url      = getCookie(WEBDAV_COOKIE_URL);
-    const username = getCookie(WEBDAV_COOKIE_USERNAME);
-    const password = getCookie(WEBDAV_COOKIE_PASSWORD);
-    const filePath = getCookie(WEBDAV_COOKIE_FILEPATH);
+function _clearLegacyCookies() {
+    LEGACY_COOKIE_NAMES.forEach(name => {
+        document.cookie = `${encodeURIComponent(name)}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; SameSite=Strict`;
+    });
+}
 
-    if (url || username || filePath) {
-        document.getElementById("webdavUrl").value      = url;
-        document.getElementById("webdavUsername").value = username;
-        document.getElementById("webdavPassword").value = password;
-        document.getElementById("webdavFilePath").value = filePath;
-        document.getElementById("webdavRemember").checked = true;
+async function loadWebDavCredentials() {
+    // Erase any plaintext cookies left over from the previous implementation
+    _clearLegacyCookies();
+
+    const url      = localStorage.getItem(STORAGE_KEY_URL)      || "";
+    const username = localStorage.getItem(STORAGE_KEY_USERNAME) || "";
+    const filePath = localStorage.getItem(STORAGE_KEY_FILEPATH) || "";
+    const encPwd   = localStorage.getItem(STORAGE_KEY_ENC_PWD);
+    const encKey   = localStorage.getItem(STORAGE_KEY_ENC_KEY);
+    const encIv    = localStorage.getItem(STORAGE_KEY_ENC_IV);
+
+    if (!url && !username && !filePath) return;
+
+    document.getElementById("webdavUrl").value      = url;
+    document.getElementById("webdavUsername").value = username;
+    document.getElementById("webdavFilePath").value = filePath;
+    document.getElementById("webdavRemember").checked = true;
+
+    if (encPwd && encKey && encIv) {
+        try {
+            const password = await decryptPassword(encPwd, encKey, encIv);
+            document.getElementById("webdavPassword").value = password;
+        } catch (err) {
+            // Decryption failed (e.g. storage was tampered with) – leave field empty
+            console.error("WebDAV: failed to decrypt stored password:", err);
+        }
     }
 }
 
@@ -502,14 +561,25 @@ async function fetchFromNextcloud() {
     }
 
     if (remember) {
-        saveWebDavCookies(serverUrl, username, password, filePath);
+        await saveWebDavCredentials(serverUrl, username, password, filePath);
     } else {
-        clearWebDavCookies();
+        clearWebDavCredentials();
+    }
+
+    // RFC 7617: the username must not contain a colon
+    if (username.includes(":")) {
+        setWebDavStatus("Username must not contain a colon character.", "error");
+        return;
     }
 
     const encodedFilePath = filePath.split("/").map(encodeURIComponent).join("/");
     const webdavUrl = `${serverUrl}/remote.php/dav/files/${encodeURIComponent(username)}/${encodedFilePath}`;
-    const credentials = btoa(`${username}:${password}`);
+
+    // btoa only handles Latin-1; encode non-ASCII chars first so the
+    // Authorization header is well-formed for any username/password.
+    const credentials = btoa(
+        unescape(encodeURIComponent(username)) + ":" + unescape(encodeURIComponent(password))
+    );
 
     setWebDavStatus("Fetching file from Nextcloud…", "loading");
 
@@ -568,4 +638,4 @@ async function fetchFromNextcloud() {
 }
 
 // Auto-load saved WebDAV connection on page load
-document.addEventListener("DOMContentLoaded", loadWebDavCookies);
+document.addEventListener("DOMContentLoaded", loadWebDavCredentials);
