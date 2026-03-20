@@ -416,3 +416,156 @@ function formatSleepSessions(sleepSessionsByDate) {
 
     return `<pre style="white-space: pre-wrap; word-wrap: break-word;">${formattedSessions}</pre>`;
 }
+
+// ── Cookie utilities ──────────────────────────────────────────────────────────
+
+function setCookie(name, value, days) {
+    // 864e5 = milliseconds per day (24 * 60 * 60 * 1000)
+    const expires = new Date(Date.now() + days * 864e5).toUTCString();
+    document.cookie = `${encodeURIComponent(name)}=${encodeURIComponent(value)}; expires=${expires}; path=/; SameSite=Strict`;
+}
+
+function getCookie(name) {
+    const prefix = encodeURIComponent(name) + "=";
+    for (const part of document.cookie.split(";")) {
+        const trimmed = part.trim();
+        if (trimmed.startsWith(prefix)) {
+            return decodeURIComponent(trimmed.slice(prefix.length));
+        }
+    }
+    return "";
+}
+
+function deleteCookie(name) {
+    document.cookie = `${encodeURIComponent(name)}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; SameSite=Strict`;
+}
+
+// ── WebDAV / Nextcloud helpers ────────────────────────────────────────────────
+
+const WEBDAV_COOKIE_DAYS = 30;
+const WEBDAV_COOKIE_URL      = "webdav_url";
+const WEBDAV_COOKIE_USERNAME = "webdav_username";
+const WEBDAV_COOKIE_PASSWORD = "webdav_password";
+const WEBDAV_COOKIE_FILEPATH = "webdav_filepath";
+
+function saveWebDavCookies(serverUrl, username, password, filePath) {
+    setCookie(WEBDAV_COOKIE_URL,      serverUrl, WEBDAV_COOKIE_DAYS);
+    setCookie(WEBDAV_COOKIE_USERNAME, username,  WEBDAV_COOKIE_DAYS);
+    setCookie(WEBDAV_COOKIE_PASSWORD, password,  WEBDAV_COOKIE_DAYS);
+    setCookie(WEBDAV_COOKIE_FILEPATH, filePath,  WEBDAV_COOKIE_DAYS);
+}
+
+function clearWebDavCookies() {
+    deleteCookie(WEBDAV_COOKIE_URL);
+    deleteCookie(WEBDAV_COOKIE_USERNAME);
+    deleteCookie(WEBDAV_COOKIE_PASSWORD);
+    deleteCookie(WEBDAV_COOKIE_FILEPATH);
+}
+
+function loadWebDavCookies() {
+    const url      = getCookie(WEBDAV_COOKIE_URL);
+    const username = getCookie(WEBDAV_COOKIE_USERNAME);
+    const password = getCookie(WEBDAV_COOKIE_PASSWORD);
+    const filePath = getCookie(WEBDAV_COOKIE_FILEPATH);
+
+    if (url || username || filePath) {
+        document.getElementById("webdavUrl").value      = url;
+        document.getElementById("webdavUsername").value = username;
+        document.getElementById("webdavPassword").value = password;
+        document.getElementById("webdavFilePath").value = filePath;
+        document.getElementById("webdavRemember").checked = true;
+    }
+}
+
+function setWebDavStatus(message, type) {
+    const el = document.getElementById("webdavStatus");
+    el.textContent = message;
+    el.className = "webdav-status " + type;
+}
+
+async function fetchFromNextcloud() {
+    const serverUrl = document.getElementById("webdavUrl").value.trim().replace(/\/+$/, "");
+    const username  = document.getElementById("webdavUsername").value.trim();
+    const password  = document.getElementById("webdavPassword").value;
+    const filePath  = document.getElementById("webdavFilePath").value.trim().replace(/^\/+/, "");
+    const remember  = document.getElementById("webdavRemember").checked;
+
+    if (!serverUrl || !username || !password || !filePath) {
+        setWebDavStatus("Please fill in all Nextcloud connection fields.", "error");
+        return;
+    }
+
+    // Only allow HTTPS to prevent credentials being sent in plaintext
+    if (!serverUrl.startsWith("https://")) {
+        setWebDavStatus("Only HTTPS Nextcloud URLs are supported to protect your credentials.", "error");
+        return;
+    }
+
+    if (remember) {
+        saveWebDavCookies(serverUrl, username, password, filePath);
+    } else {
+        clearWebDavCookies();
+    }
+
+    const encodedFilePath = filePath.split("/").map(encodeURIComponent).join("/");
+    const webdavUrl = `${serverUrl}/remote.php/dav/files/${encodeURIComponent(username)}/${encodedFilePath}`;
+    const credentials = btoa(`${username}:${password}`);
+
+    setWebDavStatus("Fetching file from Nextcloud…", "loading");
+
+    try {
+        const response = await fetch(webdavUrl, {
+            method: "GET",
+            credentials: "omit",
+            headers: {
+                "Authorization": `Basic ${credentials}`
+            }
+        });
+
+        if (!response.ok) {
+            setWebDavStatus(
+                `Failed to fetch file: ${response.status} ${response.statusText}. ` +
+                "Check URL, credentials and file path. " +
+                "Also make sure your Nextcloud server allows CORS requests from this origin.",
+                "error"
+            );
+            return;
+        }
+
+        const rawData = await response.text();
+
+        const formattedTextDiv       = document.getElementById("formattedText");
+        const tableBody              = document.getElementById("dataTable").getElementsByTagName("tbody")[0];
+        const breastfeedingChartCtx  = document.getElementById("breastfeedingChart").getContext("2d");
+        const breastfeedingTimesCtx  = document.getElementById("breastfeedingTimesChart").getContext("2d");
+        const sleepStatusChartCtx    = document.getElementById("sleepStatusChart").getContext("2d");
+        const accumulatedSleepCtx    = document.getElementById("accumulatedSleepChart").getContext("2d");
+        const formattedSleepTextDiv  = document.getElementById("formattedSleepText");
+
+        formattedTextDiv.innerHTML      = "";
+        tableBody.innerHTML             = "";
+        formattedSleepTextDiv.innerHTML = "";
+
+        processData(
+            rawData,
+            formattedTextDiv,
+            tableBody,
+            breastfeedingChartCtx,
+            breastfeedingTimesCtx,
+            sleepStatusChartCtx,
+            accumulatedSleepCtx,
+            formattedSleepTextDiv
+        );
+
+        setWebDavStatus("File fetched and analyzed successfully.", "success");
+    } catch (err) {
+        setWebDavStatus(
+            `Error fetching from Nextcloud: ${err.message}. ` +
+            "Make sure your Nextcloud server allows CORS requests from this page.",
+            "error"
+        );
+    }
+}
+
+// Auto-load saved WebDAV connection on page load
+document.addEventListener("DOMContentLoaded", loadWebDavCookies);
