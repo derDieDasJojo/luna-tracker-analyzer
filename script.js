@@ -59,15 +59,13 @@ function processData(rawData, formattedTextDiv, tableBody, breastfeedingChartCtx
             const row = tableBody.insertRow();
             row.insertCell(0).textContent = date.toLocaleDateString("de-DE") + " " + date.toLocaleTimeString("de-DE", { hour: '2-digit', minute: '2-digit' });
             row.insertCell(1).textContent = item.type || "";
-            row.insertCell(2).textContent = item.signature || "";
-            row.insertCell(3).textContent = item.notes || "";
+            row.insertCell(2).textContent = item.notes || "";
 
             if (itemType === "note" && (itemNotes === "schläft" || itemNotes === "schlaeft" || itemNotes === "wach")) {
                 const sleepRow = sleepNotesTableBody.insertRow();
                 sleepRow.insertCell(0).textContent = date.toLocaleDateString("de-DE") + " " + date.toLocaleTimeString("de-DE", { hour: '2-digit', minute: '2-digit' });
                 sleepRow.insertCell(1).textContent = item.type || "";
-                sleepRow.insertCell(2).textContent = item.signature || "";
-                sleepRow.insertCell(3).textContent = item.notes || "";
+                sleepRow.insertCell(2).textContent = item.notes || "";
             }
 
             // Conditions for Breastfeeding Chart Data
