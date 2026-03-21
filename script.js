@@ -371,6 +371,9 @@ function processData(rawData, formattedTextDiv, tableBody, breastfeedingChartCtx
         const formattedSleepText = formatSleepSessions(sleepSessionsByDate);
         formattedSleepTextDiv.innerHTML = formattedSleepText;
 
+        // Collapse input section now that data is loaded
+        document.dispatchEvent(new Event('analyzeComplete'));
+
     } catch (e) {
         alert("Invalid JSON. Please check your input.");
     }

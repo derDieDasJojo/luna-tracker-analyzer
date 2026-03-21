@@ -381,15 +381,14 @@
         <div class="header">
             <h1>Luna Tracker Analyzer</h1>
             <div class="nav-menu">
-                <button class="nav-btn active" onclick="showSection('charts')">Charts</button>
-                <button class="nav-btn" onclick="showSection('sleep')">Sleep</button>
-                <button class="nav-btn" onclick="showSection('table')">Data Table</button>
-                <button class="nav-btn" onclick="showSection('text')">Formatted Text</button>
                 <button class="input-toggle" onclick="toggleInput()">📝 Input Data</button>
+                <button class="nav-btn active" onclick="showSection('feeding')">🍼 Feeding</button>
+                <button class="nav-btn" onclick="showSection('sleep')">😴 Sleep</button>
+                <button class="nav-btn" onclick="showSection('table')">📋 Data Table</button>
             </div>
         </div>
 
-        <div class="input-section" id="inputSection">
+        <div class="input-section expanded" id="inputSection">
             <p>Paste your JSON data below or upload a JSON file and click "Analyze" to see the results:</p>
             <textarea id="jsonInput" placeholder="Enter JSON here..."></textarea>
             <br>
@@ -414,8 +413,8 @@
             </div>
         </div>
 
-        <div id="chartsSection" class="content-section active">
-            <h2>📊 Breastfeeding Charts</h2>
+        <div id="feedingSection" class="content-section active">
+            <h2>🍼 Feeding</h2>
             <div>
                 <h3>Occurrences per Day</h3>
                 <canvas id="breastfeedingChart"></canvas>
@@ -427,6 +426,10 @@
             <div style="margin-top: 30px;">
                 <h3>Daily Patterns: Breastfeeding per Hour by Day</h3>
                 <canvas id="dailyPatternsChart"></canvas>
+            </div>
+            <div style="margin-top: 30px;">
+                <h2>Formatted Events</h2>
+                <div id="formattedText"></div>
             </div>
         </div>
 
@@ -475,10 +478,7 @@
             </table>
         </div>
 
-        <div id="textSection" class="content-section">
-            <h2>📝 Formatted Breastfeeding Events</h2>
-            <div id="formattedText"></div>
-        </div>
+
     </div>
 
     <script src="script.js"></script>
@@ -505,6 +505,12 @@
             const inputSection = document.getElementById('inputSection');
             inputSection.classList.toggle('expanded');
         }
+
+        // Auto-collapse input section once data has been analyzed
+        document.addEventListener('analyzeComplete', function() {
+            const inputSection = document.getElementById('inputSection');
+            inputSection.classList.remove('expanded');
+        });
     </script>
 </body>
 
