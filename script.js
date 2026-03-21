@@ -8,11 +8,13 @@ function analyzeJson() {
     const sleepStatusChartCtx = document.getElementById("sleepStatusChart").getContext("2d");
     const accumulatedSleepChartCtx = document.getElementById("accumulatedSleepChart").getContext("2d");
     const formattedSleepTextDiv = document.getElementById("formattedSleepText");
+    const sleepNotesTableBody = document.getElementById("sleepNotesTable").getElementsByTagName("tbody")[0];
 
     // Clear previous results
     formattedTextDiv.innerHTML = "";
     tableBody.innerHTML = "";
     formattedSleepTextDiv.innerHTML = "";
+    sleepNotesTableBody.innerHTML = "";
 
     let rawData = textArea.value;
 
@@ -22,19 +24,20 @@ function analyzeJson() {
         const reader = new FileReader();
         reader.onload = function(e) {
             rawData = e.target.result;
-            processData(rawData, formattedTextDiv, tableBody, breastfeedingChartCtx, breastfeedingTimesChartCtx, sleepStatusChartCtx, accumulatedSleepChartCtx, formattedSleepTextDiv);
+            processData(rawData, formattedTextDiv, tableBody, breastfeedingChartCtx, breastfeedingTimesChartCtx, sleepStatusChartCtx, accumulatedSleepChartCtx, formattedSleepTextDiv, sleepNotesTableBody);
         };
         reader.readAsText(file);
         return; // Exit early, processing will happen in onload
     }
 
     // If no file, use textarea content
-    processData(rawData, formattedTextDiv, tableBody, breastfeedingChartCtx, breastfeedingTimesChartCtx, sleepStatusChartCtx, accumulatedSleepChartCtx, formattedSleepTextDiv);
+    processData(rawData, formattedTextDiv, tableBody, breastfeedingChartCtx, breastfeedingTimesChartCtx, sleepStatusChartCtx, accumulatedSleepChartCtx, formattedSleepTextDiv, sleepNotesTableBody);
 }
 
-function processData(rawData, formattedTextDiv, tableBody, breastfeedingChartCtx, breastfeedingTimesChartCtx, sleepStatusChartCtx, accumulatedSleepChartCtx, formattedSleepTextDiv) {
+function processData(rawData, formattedTextDiv, tableBody, breastfeedingChartCtx, breastfeedingTimesChartCtx, sleepStatusChartCtx, accumulatedSleepChartCtx, formattedSleepTextDiv, sleepNotesTableBody) {
     try {
         const data = JSON.parse(rawData);
+        const normalizeString = (value) => String(value || "").trim().toLowerCase();
 
         // Format the data and display in text
         let formattedText = formatBreastfeedingEvents(data);
@@ -49,12 +52,23 @@ function processData(rawData, formattedTextDiv, tableBody, breastfeedingChartCtx
             const date = new Date(item.time * 1000);
             const formattedDate = date.toLocaleDateString("de-DE");
             const hour = date.getHours();
+            const itemType = normalizeString(item.type);
+            const itemNotes = normalizeString(item.notes);
 
             // Populate table with all data types
             const row = tableBody.insertRow();
             row.insertCell(0).textContent = date.toLocaleDateString("de-DE") + " " + date.toLocaleTimeString("de-DE", { hour: '2-digit', minute: '2-digit' });
-            row.insertCell(1).textContent = item.type;
-            row.insertCell(2).textContent = item.signature;
+            row.insertCell(1).textContent = item.type || "";
+            row.insertCell(2).textContent = item.signature || "";
+            row.insertCell(3).textContent = item.notes || "";
+
+            if (itemType === "note" && (itemNotes === "schläft" || itemNotes === "schlaeft" || itemNotes === "wach")) {
+                const sleepRow = sleepNotesTableBody.insertRow();
+                sleepRow.insertCell(0).textContent = date.toLocaleDateString("de-DE") + " " + date.toLocaleTimeString("de-DE", { hour: '2-digit', minute: '2-digit' });
+                sleepRow.insertCell(1).textContent = item.type || "";
+                sleepRow.insertCell(2).textContent = item.signature || "";
+                sleepRow.insertCell(3).textContent = item.notes || "";
+            }
 
             // Conditions for Breastfeeding Chart Data
             if (item.type === "BREASTFEEDING_LEFT_NIPPLE" || item.type === "BREASTFEEDING_RIGHT_NIPPLE") {
@@ -197,8 +211,14 @@ function processData(rawData, formattedTextDiv, tableBody, breastfeedingChartCtx
         });
 
         // SLEEP ANALYSIS
-        // Filter sleep events (entries with notes: "schläft" and "wach")
-        const sleepEvents = data.filter(item => item.notes && (item.notes === "schläft" || item.notes === "wach")).sort((a, b) => a.time - b.time);
+        // Filter sleep events (type note and notes: "schläft"/"schlaeft"/"wach")
+        const sleepEvents = data
+            .filter(item => {
+                const itemType = normalizeString(item.type);
+                const itemNotes = normalizeString(item.notes);
+                return itemType === "note" && (itemNotes === "schläft" || itemNotes === "schlaeft" || itemNotes === "wach");
+            })
+            .sort((a, b) => a.time - b.time);
         
         // Process sleep sessions
         const sleepSessionsByDate = {};
@@ -208,10 +228,11 @@ function processData(rawData, formattedTextDiv, tableBody, breastfeedingChartCtx
         sleepEvents.forEach(event => {
             const date = new Date(event.time * 1000);
             const dateStr = date.toLocaleDateString("de-DE");
+            const eventNotes = normalizeString(event.notes);
             
-            if (event.notes === "schläft") {
+            if (eventNotes === "schläft" || eventNotes === "schlaeft") {
                 sleepStartTime = date;
-            } else if (event.notes === "wach" && sleepStartTime) {
+            } else if (eventNotes === "wach" && sleepStartTime) {
                 // Calculate sleep duration
                 const sleepDuration = date - sleepStartTime;
                 const sleepDurationHours = sleepDuration / (1000 * 60 * 60);
@@ -606,6 +627,7 @@ async function fetchFromNextcloud() {
 
         const formattedTextDiv       = document.getElementById("formattedText");
         const tableBody              = document.getElementById("dataTable").getElementsByTagName("tbody")[0];
+        const sleepNotesTableBody    = document.getElementById("sleepNotesTable").getElementsByTagName("tbody")[0];
         const breastfeedingChartCtx  = document.getElementById("breastfeedingChart").getContext("2d");
         const breastfeedingTimesCtx  = document.getElementById("breastfeedingTimesChart").getContext("2d");
         const sleepStatusChartCtx    = document.getElementById("sleepStatusChart").getContext("2d");
@@ -615,6 +637,7 @@ async function fetchFromNextcloud() {
         formattedTextDiv.innerHTML      = "";
         tableBody.innerHTML             = "";
         formattedSleepTextDiv.innerHTML = "";
+        sleepNotesTableBody.innerHTML   = "";
 
         processData(
             rawData,
@@ -624,7 +647,8 @@ async function fetchFromNextcloud() {
             breastfeedingTimesCtx,
             sleepStatusChartCtx,
             accumulatedSleepCtx,
-            formattedSleepTextDiv
+            formattedSleepTextDiv,
+            sleepNotesTableBody
         );
 
         setWebDavStatus("File fetched and analyzed successfully.", "success");

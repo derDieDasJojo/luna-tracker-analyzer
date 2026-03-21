@@ -28,9 +28,10 @@ Navigate between views with the top buttons:
 - **Sleep Status per Hour** – stepped line chart showing sleeping (1) vs awake (0) for each recorded day
 - **Accumulated Sleep per Day** – bar chart of total sleep hours per day
 - **Sleep Sessions** – formatted text list of each sleep interval with start time, end time, and duration
+- **Sleep Note Events** – table of all `note` events where `notes` is `schläft` or `wach`
 
 #### 📋 Data Table
-Raw view of every entry in the JSON export: time, type, and signature.
+Raw view of every entry in the JSON export: time, type, signature, and notes.
 
 #### 📝 Formatted Breastfeeding Events
 Human-readable log of breastfeeding sessions grouped by day, using `l` (left nipple) and `r` (right nipple) shorthand with time ranges and gap markers.
@@ -134,11 +135,19 @@ No build step or server is required.
 # Clone the repository
 git clone https://github.com/derDieDasJojo/luna-tracker-analyzer.git
 cd luna-tracker-analyzer
-
 # Open in your browser
 open index.html        # macOS
 xdg-open index.html   # Linux
 start index.html       # Windows
+```
+
+or start npx serve
+```bash
+npx serve -p 8000
+# Open in your browser
+open localhost:8000       # macOS
+xdg-open localhost:8000   # Linux
+start localhost:8000       # Windows
 ```
 
 Or simply double-click `index.html` in your file manager.
