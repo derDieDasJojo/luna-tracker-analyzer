@@ -379,7 +379,10 @@ function processData(rawData, formattedTextDiv, tableBody, breastfeedingChartCtx
 
 // Function to process and format breastfeeding events
 function formatBreastfeedingEvents(data) {
-    const events = data.filter(item => item.type.startsWith("BREASTFEEDING")).sort((a, b) => a.time - b.time);
+    const allowedTypes = ["BREASTFEEDING_LEFT_NIPPLE", "BREASTFEEDING_RIGHT_NIPPLE"];
+    const events = data
+        .filter(item => allowedTypes.includes(item.type))
+        .sort((a, b) => a.time - b.time);
     let formattedEvents = "";
     let previousEndTime = null;
     let currentDate = null;
@@ -398,9 +401,9 @@ function formatBreastfeedingEvents(data) {
         }
 
         // Check if there is a gap of more than 1 hour
-        if (previousEndTime && (startTime - previousEndTime) > 3600000) {
-            formattedEvents += "\n"; // Add a blank line for a large gap
-        }
+        //if (previousEndTime && (startTime - previousEndTime) > 3600000) {
+        //    formattedEvents += "\n"; // Add a blank line for a large gap
+        //}
 
         // Format the event
         const type = event.type === "BREASTFEEDING_RIGHT_NIPPLE" ? "r" : 
