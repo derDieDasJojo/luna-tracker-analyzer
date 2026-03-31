@@ -115,8 +115,6 @@ Because there is no server-side secret, the AES key lives alongside the cipherte
 - Passwords appearing in plaintext in bug reports, screenshots, or browser-profile exports
 - The previous approach where credentials were stored as **plaintext cookies** that were attached to every HTTP request
 
-### Cookie migration
-On every page load the app automatically deletes any plaintext WebDAV cookies written by older versions of the app.
 
 ### Credential-free fetch
 The WebDAV HTTP request is made with `credentials: "omit"`, which prevents the browser from automatically attaching session cookies or other stored credentials to the request.
