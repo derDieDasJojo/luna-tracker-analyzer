@@ -443,44 +443,83 @@ function formatDurationLabel(durationMinutes) {
         : `${remainingMinutes}min`;
 }
 
-const BREASTFEEDING_INTERVAL_TYPES = ["BREASTFEEDING_LEFT_NIPPLE", "BREASTFEEDING_RIGHT_NIPPLE"];
+const BREASTFEEDING_START_TYPES = ["BREASTFEEDING_LEFT_NIPPLE", "BREASTFEEDING_RIGHT_NIPPLE"];
+const BREASTFEEDING_END_TYPE = "BREASTFEEDING_BOTH_NIPPLE";
 const DEFAULT_BREASTFEEDING_DURATION_MINUTES = 20;
 const MAX_INFERRED_BREASTFEEDING_DURATION_MINUTES = 45;
 
 function buildBreastfeedingSessions(data) {
-    const events = data
-        .filter(item => BREASTFEEDING_INTERVAL_TYPES.includes(item.type))
+    const allBreastfeedingEvents = data
+        .filter(item => BREASTFEEDING_START_TYPES.includes(item.type) || item.type === BREASTFEEDING_END_TYPE)
         .sort((a, b) => a.time - b.time);
 
-    return events.map((event, index) => ({
-        type: event.type,
-        start: new Date(event.time * 1000),
-        end: index < events.length - 1 ? new Date(events[index + 1].time * 1000) : null
-    }));
+    const sessions = [];
+    
+    for (let i = 0; i < allBreastfeedingEvents.length; i++) {
+        const event = allBreastfeedingEvents[i];
+        
+        // Only process start events (LEFT_NIPPLE or RIGHT_NIPPLE)
+        if (!BREASTFEEDING_START_TYPES.includes(event.type)) {
+            continue;
+        }
+        
+        // Find the next BOTH_NIPPLE event
+        let endEvent = null;
+        for (let j = i + 1; j < allBreastfeedingEvents.length; j++) {
+            if (allBreastfeedingEvents[j].type === BREASTFEEDING_END_TYPE) {
+                endEvent = allBreastfeedingEvents[j];
+                break;
+            }
+        }
+        
+        sessions.push({
+            type: event.type,
+            start: new Date(event.time * 1000),
+            end: endEvent ? new Date(endEvent.time * 1000) : null
+        });
+    }
+    
+    return sessions;
 }
 
 function buildBreastfeedingOverlapIntervals(data) {
     const defaultDurationMs = DEFAULT_BREASTFEEDING_DURATION_MINUTES * 60000;
     const maxInferredDurationMs = MAX_INFERRED_BREASTFEEDING_DURATION_MINUTES * 60000;
-    const events = data
-        .filter(item => BREASTFEEDING_INTERVAL_TYPES.includes(item.type))
+    
+    const allBreastfeedingEvents = data
+        .filter(item => BREASTFEEDING_START_TYPES.includes(item.type) || item.type === BREASTFEEDING_END_TYPE)
         .sort((a, b) => a.time - b.time);
 
-    const intervals = events.map((event, index) => {
+    const intervals = [];
+    
+    for (let i = 0; i < allBreastfeedingEvents.length; i++) {
+        const event = allBreastfeedingEvents[i];
+        
+        // Only process start events (LEFT_NIPPLE or RIGHT_NIPPLE)
+        if (!BREASTFEEDING_START_TYPES.includes(event.type)) {
+            continue;
+        }
+        
         const start = new Date(event.time * 1000);
-        const nextEvent = events[index + 1];
-        const nextStartMs = nextEvent ? nextEvent.time * 1000 : null;
-        const inferredDurationMs = nextStartMs ? Math.max(0, nextStartMs - start.getTime()) : defaultDurationMs;
-        const durationMs = Math.min(
-            nextStartMs ? inferredDurationMs : defaultDurationMs,
-            maxInferredDurationMs
-        ) || defaultDurationMs;
-
-        return {
+        let durationMs = defaultDurationMs;
+        let endDate = new Date(start.getTime() + durationMs);
+        
+        // Find the next BOTH_NIPPLE event
+        for (let j = i + 1; j < allBreastfeedingEvents.length; j++) {
+            if (allBreastfeedingEvents[j].type === BREASTFEEDING_END_TYPE) {
+                const nextEventMs = allBreastfeedingEvents[j].time * 1000;
+                const inferredDurationMs = Math.max(0, nextEventMs - start.getTime());
+                durationMs = Math.min(inferredDurationMs, maxInferredDurationMs) || defaultDurationMs;
+                endDate = new Date(start.getTime() + durationMs);
+                break;
+            }
+        }
+        
+        intervals.push({
             start,
-            end: new Date(start.getTime() + durationMs)
-        };
-    });
+            end: endDate
+        });
+    }
 
     return mergeIntervals(intervals);
 }
