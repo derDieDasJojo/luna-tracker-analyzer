@@ -377,6 +377,15 @@ function processData(rawData, formattedTextDiv, tableBody, breastfeedingChartCtx
     }
 }
 
+function formatDurationLabel(durationMinutes) {
+    const durationHours = Math.floor(durationMinutes / 60);
+    const remainingMinutes = durationMinutes % 60;
+
+    return durationHours > 0
+        ? `${durationHours}h ${remainingMinutes.toString().padStart(2, "0")}min`
+        : `${remainingMinutes}min`;
+}
+
 // Function to process and format breastfeeding events
 function formatBreastfeedingEvents(data) {
     const allowedTypes = ["BREASTFEEDING_LEFT_NIPPLE", "BREASTFEEDING_RIGHT_NIPPLE"];
@@ -411,6 +420,8 @@ function formatBreastfeedingEvents(data) {
         formattedEvents += `${type}:${startTime.toLocaleTimeString("de-DE", { hour: '2-digit', minute: '2-digit' })}`;
         if (endTime) {
             formattedEvents += ` - ${endTime.toLocaleTimeString("de-DE", { hour: '2-digit', minute: '2-digit' })}`;
+            const durationMinutes = Math.round((endTime - startTime) / 60000);
+            formattedEvents += ` (${formatDurationLabel(durationMinutes)})`;
         }
         formattedEvents += "\n";
 
@@ -431,9 +442,9 @@ function formatSleepSessions(sleepSessionsByDate) {
         sleepSessionsByDate[date].forEach(session => {
             const startTime = session.start.toLocaleTimeString("de-DE", { hour: '2-digit', minute: '2-digit' });
             const endTime = session.end.toLocaleTimeString("de-DE", { hour: '2-digit', minute: '2-digit' });
-            const durationHours = session.duration.toFixed(2);
+            const durationMinutes = Math.round(session.duration * 60);
             
-            formattedSessions += `${startTime} - ${endTime} (${durationHours}h)\n`;
+            formattedSessions += `${startTime} - ${endTime} (${formatDurationLabel(durationMinutes)})\n`;
         });
         
         formattedSessions += "\n";
