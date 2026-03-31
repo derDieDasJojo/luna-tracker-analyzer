@@ -313,6 +313,19 @@
             border: 1px solid #c6f6d5;
         }
 
+        .chart-range-controls {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 12px;
+            padding: 12px 16px;
+            margin-bottom: 16px;
+            border: 1px solid #e2e8f0;
+        }
+
+        .chart-range-controls .checkbox-label {
+            margin: 0;
+            font-weight: 500;
+        }
+
         @media (max-width: 768px) {
             .webdav-fields {
                 grid-template-columns: 1fr;
@@ -353,6 +366,13 @@
                 <button class="nav-btn" data-section="sleep" onclick="showSection('sleep', this)">😴 Sleep</button>
                 <button class="nav-btn" data-section="table" onclick="showSection('table', this)">📋 Data</button>
             </div>
+        </div>
+
+        <div class="chart-range-controls">
+            <label class="checkbox-label">
+                <input type="checkbox" id="showAllDaysToggle">
+                Alle Tage in Diagrammen anzeigen (standardmäßig letzte 7 Tage)
+            </label>
         </div>
 
         <div id="inputSection" class="content-section active input-section">

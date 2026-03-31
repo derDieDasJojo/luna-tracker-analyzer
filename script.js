@@ -1,6 +1,38 @@
-function analyzeJson() {
-    const textArea = document.getElementById("jsonInput");
-    const fileInput = document.getElementById("jsonFile");
+const DEFAULT_VISIBLE_DAY_COUNT = 7;
+let showAllDaysInCharts = false;
+let lastAnalyzedRawData = null;
+let breastfeedingChartInstance = null;
+let breastfeedingTimesChartInstance = null;
+let dailyPatternsChartInstance = null;
+let sleepStatusChartInstance = null;
+let accumulatedSleepChartInstance = null;
+
+function getVisibleDateKeys(dateKeys) {
+    const sortedDates = [...dateKeys].sort((a, b) => parseDeDateString(a) - parseDeDateString(b));
+    if (showAllDaysInCharts) {
+        return sortedDates;
+    }
+    return sortedDates.slice(-DEFAULT_VISIBLE_DAY_COUNT);
+}
+
+function parseDeDateString(dateString) {
+    const parts = dateString.split(".").map(Number);
+    if (parts.length !== 3 || parts.some(Number.isNaN)) {
+        return new Date(dateString);
+    }
+    const [day, month, year] = parts;
+    return new Date(year, month - 1, day);
+}
+
+function updateChartDayRange(showAll) {
+    showAllDaysInCharts = showAll;
+
+    if (lastAnalyzedRawData) {
+        analyzeRawData(lastAnalyzedRawData);
+    }
+}
+
+function analyzeRawData(rawData) {
     const formattedTextDiv = document.getElementById("formattedText");
     const tableBody = document.getElementById("dataTable").getElementsByTagName("tbody")[0];
     const breastfeedingChartCtx = document.getElementById("breastfeedingChart").getContext("2d");
@@ -16,6 +48,14 @@ function analyzeJson() {
     formattedSleepTextDiv.innerHTML = "";
     sleepNotesTableBody.innerHTML = "";
 
+    lastAnalyzedRawData = rawData;
+
+    processData(rawData, formattedTextDiv, tableBody, breastfeedingChartCtx, breastfeedingTimesChartCtx, sleepStatusChartCtx, accumulatedSleepChartCtx, formattedSleepTextDiv, sleepNotesTableBody);
+}
+
+function analyzeJson() {
+    const textArea = document.getElementById("jsonInput");
+    const fileInput = document.getElementById("jsonFile");
     let rawData = textArea.value;
 
     // If a file is selected, read it
@@ -24,14 +64,14 @@ function analyzeJson() {
         const reader = new FileReader();
         reader.onload = function(e) {
             rawData = e.target.result;
-            processData(rawData, formattedTextDiv, tableBody, breastfeedingChartCtx, breastfeedingTimesChartCtx, sleepStatusChartCtx, accumulatedSleepChartCtx, formattedSleepTextDiv, sleepNotesTableBody);
+            analyzeRawData(rawData);
         };
         reader.readAsText(file);
         return; // Exit early, processing will happen in onload
     }
 
     // If no file, use textarea content
-    processData(rawData, formattedTextDiv, tableBody, breastfeedingChartCtx, breastfeedingTimesChartCtx, sleepStatusChartCtx, accumulatedSleepChartCtx, formattedSleepTextDiv, sleepNotesTableBody);
+    analyzeRawData(rawData);
 }
 
 function processData(rawData, formattedTextDiv, tableBody, breastfeedingChartCtx, breastfeedingTimesChartCtx, sleepStatusChartCtx, accumulatedSleepChartCtx, formattedSleepTextDiv, sleepNotesTableBody) {
@@ -94,10 +134,13 @@ function processData(rawData, formattedTextDiv, tableBody, breastfeedingChartCtx
         });
 
         // Create Breastfeeding Chart (Occurrences per Day)
-        const breastfeedingDates = Object.keys(breastfeedingPerDay);
-        const breastfeedingCounts = Object.values(breastfeedingPerDay);
+        const breastfeedingDates = getVisibleDateKeys(Object.keys(breastfeedingPerDay));
+        const breastfeedingCounts = breastfeedingDates.map(date => breastfeedingPerDay[date]);
 
-        new Chart(breastfeedingChartCtx, {
+        if (breastfeedingChartInstance) {
+            breastfeedingChartInstance.destroy();
+        }
+        breastfeedingChartInstance = new Chart(breastfeedingChartCtx, {
             type: 'bar',
             data: {
                 labels: breastfeedingDates,
@@ -123,7 +166,10 @@ function processData(rawData, formattedTextDiv, tableBody, breastfeedingChartCtx
         const hours = Array.from({ length: 24 }, (_, i) => i); // 0 to 23 hours
         const breastfeedingHourlyCounts = hours.map(hour => breastfeedingPerHour[hour] || 0);
 
-        new Chart(breastfeedingTimesChartCtx, {
+        if (breastfeedingTimesChartInstance) {
+            breastfeedingTimesChartInstance.destroy();
+        }
+        breastfeedingTimesChartInstance = new Chart(breastfeedingTimesChartCtx, {
             type: 'line',
             data: {
                 labels: hours.map(h => h + ":00"),
@@ -148,7 +194,7 @@ function processData(rawData, formattedTextDiv, tableBody, breastfeedingChartCtx
 
         // Create Daily Breastfeeding Patterns Chart
         const dailyPatternsChartCtx = document.getElementById("dailyPatternsChart").getContext("2d");
-        const dates = Object.keys(breastfeedingPerDayPerHour).sort();
+        const dates = getVisibleDateKeys(Object.keys(breastfeedingPerDayPerHour));
         const colors = [
             'rgba(255, 99, 132, 1)', 'rgba(54, 162, 235, 1)', 'rgba(255, 205, 86, 1)',
             'rgba(75, 192, 192, 1)', 'rgba(153, 102, 255, 1)', 'rgba(255, 159, 64, 1)',
@@ -170,7 +216,10 @@ function processData(rawData, formattedTextDiv, tableBody, breastfeedingChartCtx
             };
         });
 
-        new Chart(dailyPatternsChartCtx, {
+        if (dailyPatternsChartInstance) {
+            dailyPatternsChartInstance.destroy();
+        }
+        dailyPatternsChartInstance = new Chart(dailyPatternsChartCtx, {
             type: 'line',
             data: {
                 labels: hours.map(h => h + ":00"),
@@ -255,7 +304,7 @@ function processData(rawData, formattedTextDiv, tableBody, breastfeedingChartCtx
         });
 
         // Create Sleep Status Chart (Sleep/Awake per Hour by Day)
-        const sleepDates = Object.keys(sleepSessionsByDate).sort();
+        const sleepDates = getVisibleDateKeys(Object.keys(sleepSessionsByDate));
         
         const sleepDatasets = sleepDates.map((date, index) => {
             const hourlyData = Array(24).fill(0);
@@ -300,7 +349,10 @@ function processData(rawData, formattedTextDiv, tableBody, breastfeedingChartCtx
             };
         });
 
-        new Chart(sleepStatusChartCtx, {
+        if (sleepStatusChartInstance) {
+            sleepStatusChartInstance.destroy();
+        }
+        sleepStatusChartInstance = new Chart(sleepStatusChartCtx, {
             type: 'line',
             data: {
                 labels: hours.map(h => h + ":00"),
@@ -338,10 +390,13 @@ function processData(rawData, formattedTextDiv, tableBody, breastfeedingChartCtx
         });
 
         // Create Accumulated Sleep Chart
-        const sleepDatesForAccumulated = Object.keys(accumulatedSleepByDate).sort();
-        const sleepHours = Object.values(accumulatedSleepByDate);
+        const sleepDatesForAccumulated = getVisibleDateKeys(Object.keys(accumulatedSleepByDate));
+        const sleepHours = sleepDatesForAccumulated.map(date => accumulatedSleepByDate[date]);
 
-        new Chart(accumulatedSleepChartCtx, {
+        if (accumulatedSleepChartInstance) {
+            accumulatedSleepChartInstance.destroy();
+        }
+        accumulatedSleepChartInstance = new Chart(accumulatedSleepChartCtx, {
             type: 'bar',
             data: {
                 labels: sleepDatesForAccumulated,
@@ -735,31 +790,7 @@ async function fetchFromNextcloud() {
 
         const rawData = await response.text();
 
-        const formattedTextDiv       = document.getElementById("formattedText");
-        const tableBody              = document.getElementById("dataTable").getElementsByTagName("tbody")[0];
-        const sleepNotesTableBody    = document.getElementById("sleepNotesTable").getElementsByTagName("tbody")[0];
-        const breastfeedingChartCtx  = document.getElementById("breastfeedingChart").getContext("2d");
-        const breastfeedingTimesCtx  = document.getElementById("breastfeedingTimesChart").getContext("2d");
-        const sleepStatusChartCtx    = document.getElementById("sleepStatusChart").getContext("2d");
-        const accumulatedSleepCtx    = document.getElementById("accumulatedSleepChart").getContext("2d");
-        const formattedSleepTextDiv  = document.getElementById("formattedSleepText");
-
-        formattedTextDiv.innerHTML      = "";
-        tableBody.innerHTML             = "";
-        formattedSleepTextDiv.innerHTML = "";
-        sleepNotesTableBody.innerHTML   = "";
-
-        processData(
-            rawData,
-            formattedTextDiv,
-            tableBody,
-            breastfeedingChartCtx,
-            breastfeedingTimesCtx,
-            sleepStatusChartCtx,
-            accumulatedSleepCtx,
-            formattedSleepTextDiv,
-            sleepNotesTableBody
-        );
+        analyzeRawData(rawData);
 
         setWebDavStatus("File fetched and analyzed successfully.", "success");
     } catch (err) {
@@ -773,3 +804,14 @@ async function fetchFromNextcloud() {
 
 // Auto-load saved WebDAV connection on page load
 document.addEventListener("DOMContentLoaded", loadWebDavCredentials);
+document.addEventListener("DOMContentLoaded", function() {
+    const showAllDaysToggle = document.getElementById("showAllDaysToggle");
+    if (!showAllDaysToggle) {
+        return;
+    }
+
+    showAllDaysToggle.checked = false;
+    showAllDaysToggle.addEventListener("change", function() {
+        updateChartDayRange(showAllDaysToggle.checked);
+    });
+});
