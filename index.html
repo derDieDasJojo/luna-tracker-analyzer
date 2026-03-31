@@ -348,10 +348,10 @@
         <div class="header">
             <h1>Luna Tracker Analyzer</h1>
             <div class="nav-menu">
-                <button class="nav-btn" onclick="showSection('input')">📝 Input</button>
-                <button class="nav-btn active" onclick="showSection('feeding')">🍼 Feeding</button>
-                <button class="nav-btn" onclick="showSection('sleep')">😴 Sleep</button>
-                <button class="nav-btn" onclick="showSection('table')">📋 Data</button>
+                <button class="nav-btn active" data-section="input" onclick="showSection('input', this)">📝 Input</button>
+                <button class="nav-btn" data-section="feeding" onclick="showSection('feeding', this)">🍼 Feeding</button>
+                <button class="nav-btn" data-section="sleep" onclick="showSection('sleep', this)">😴 Sleep</button>
+                <button class="nav-btn" data-section="table" onclick="showSection('table', this)">📋 Data</button>
             </div>
         </div>
 
@@ -381,7 +381,7 @@
             </div>
         </div>
 
-        <div id="feedingSection" class="content-section active">
+        <div id="feedingSection" class="content-section">
             <h2>🍼 Feeding</h2>
             <div>
                 <h3>Occurrences per Day</h3>
@@ -449,7 +449,7 @@
 
     <script src="script.js"></script>
     <script>
-        function showSection(sectionName) {
+        function showSection(sectionName, buttonElement) {
             // Hide all sections
             document.querySelectorAll('.content-section').forEach(section => {
                 section.classList.remove('active');
@@ -463,13 +463,16 @@
             // Show selected section
             document.getElementById(sectionName + 'Section').classList.add('active');
 
-            // Add active class to clicked button
-            event.target.classList.add('active');
+            // Add active class to the matching nav button
+            const activeButton = buttonElement || document.querySelector(`.nav-btn[data-section="${sectionName}"]`);
+            if (activeButton) {
+                activeButton.classList.add('active');
+            }
         }
 
-        // Auto-hide input section once data has been analyzed
+        // Show sleep data once data has been analyzed or fetched
         document.addEventListener('analyzeComplete', function() {
-            showSection('feeding');
+            showSection('sleep');
         });
     </script>
 </body>
