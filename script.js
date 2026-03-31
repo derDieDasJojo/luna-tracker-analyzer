@@ -38,9 +38,11 @@ function processData(rawData, formattedTextDiv, tableBody, breastfeedingChartCtx
     try {
         const data = JSON.parse(rawData);
         const normalizeString = (value) => String(value || "").trim().toLowerCase();
+        const breastfeedingSessions = buildBreastfeedingSessions(data);
+        const breastfeedingOverlapIntervals = buildBreastfeedingOverlapIntervals(data);
 
         // Format the data and display in text
-        let formattedText = formatBreastfeedingEvents(data);
+        let formattedText = formatBreastfeedingEvents(breastfeedingSessions);
         formattedTextDiv.innerHTML = formattedText;
 
         // Initialize data structures for charts
@@ -366,7 +368,7 @@ function processData(rawData, formattedTextDiv, tableBody, breastfeedingChartCtx
         });
 
         // Format sleep sessions text
-        const formattedSleepText = formatSleepSessions(sleepSessionsByDate);
+        const formattedSleepText = formatSleepSessions(sleepSessionsByDate, breastfeedingOverlapIntervals);
         formattedSleepTextDiv.innerHTML = formattedSleepText;
 
         // Collapse input section now that data is loaded
@@ -386,21 +388,84 @@ function formatDurationLabel(durationMinutes) {
         : `${remainingMinutes}min`;
 }
 
-// Function to process and format breastfeeding events
-function formatBreastfeedingEvents(data) {
-    const allowedTypes = ["BREASTFEEDING_LEFT_NIPPLE", "BREASTFEEDING_RIGHT_NIPPLE"];
+const BREASTFEEDING_INTERVAL_TYPES = ["BREASTFEEDING_LEFT_NIPPLE", "BREASTFEEDING_RIGHT_NIPPLE"];
+const DEFAULT_BREASTFEEDING_DURATION_MINUTES = 20;
+const MAX_INFERRED_BREASTFEEDING_DURATION_MINUTES = 45;
+
+function buildBreastfeedingSessions(data) {
     const events = data
-        .filter(item => allowedTypes.includes(item.type))
+        .filter(item => BREASTFEEDING_INTERVAL_TYPES.includes(item.type))
         .sort((a, b) => a.time - b.time);
+
+    return events.map((event, index) => ({
+        type: event.type,
+        start: new Date(event.time * 1000),
+        end: index < events.length - 1 ? new Date(events[index + 1].time * 1000) : null
+    }));
+}
+
+function buildBreastfeedingOverlapIntervals(data) {
+    const defaultDurationMs = DEFAULT_BREASTFEEDING_DURATION_MINUTES * 60000;
+    const maxInferredDurationMs = MAX_INFERRED_BREASTFEEDING_DURATION_MINUTES * 60000;
+    const events = data
+        .filter(item => BREASTFEEDING_INTERVAL_TYPES.includes(item.type))
+        .sort((a, b) => a.time - b.time);
+
+    const intervals = events.map((event, index) => {
+        const start = new Date(event.time * 1000);
+        const nextEvent = events[index + 1];
+        const nextStartMs = nextEvent ? nextEvent.time * 1000 : null;
+        const inferredDurationMs = nextStartMs ? Math.max(0, nextStartMs - start.getTime()) : defaultDurationMs;
+        const durationMs = Math.min(
+            nextStartMs ? inferredDurationMs : defaultDurationMs,
+            maxInferredDurationMs
+        ) || defaultDurationMs;
+
+        return {
+            start,
+            end: new Date(start.getTime() + durationMs)
+        };
+    });
+
+    return mergeIntervals(intervals);
+}
+
+function mergeIntervals(intervals) {
+    if (intervals.length === 0) {
+        return [];
+    }
+
+    const sortedIntervals = [...intervals].sort((a, b) => a.start - b.start);
+    const mergedIntervals = [sortedIntervals[0]];
+
+    for (let i = 1; i < sortedIntervals.length; i++) {
+        const currentInterval = sortedIntervals[i];
+        const lastMergedInterval = mergedIntervals[mergedIntervals.length - 1];
+
+        if (currentInterval.start.getTime() <= lastMergedInterval.end.getTime()) {
+            lastMergedInterval.end = new Date(Math.max(lastMergedInterval.end.getTime(), currentInterval.end.getTime()));
+            continue;
+        }
+
+        mergedIntervals.push({
+            start: currentInterval.start,
+            end: currentInterval.end
+        });
+    }
+
+    return mergedIntervals;
+}
+
+// Function to process and format breastfeeding events
+function formatBreastfeedingEvents(events) {
     let formattedEvents = "";
     let previousEndTime = null;
     let currentDate = null;
 
     for (let i = 0; i < events.length; i++) {
         const event = events[i];
-        const nextEvent = events[i + 1];
-        const startTime = new Date(event.time * 1000);
-        const endTime = nextEvent ? new Date(nextEvent.time * 1000) : null;
+        const startTime = event.start;
+        const endTime = event.end;
 
         // Write the date if it's different from the current date
         if (startTime.toDateString() !== currentDate) {
@@ -431,21 +496,51 @@ function formatBreastfeedingEvents(data) {
     return formattedEvents;
 }
 
+function calculateOverlapMinutes(rangeStart, rangeEnd, intervals) {
+    return intervals.reduce((totalMinutes, interval) => {
+        if (!interval.end || interval.end <= rangeStart || interval.start >= rangeEnd) {
+            return totalMinutes;
+        }
+
+        const overlapStart = Math.max(rangeStart.getTime(), interval.start.getTime());
+        const overlapEnd = Math.min(rangeEnd.getTime(), interval.end.getTime());
+
+        if (overlapEnd <= overlapStart) {
+            return totalMinutes;
+        }
+
+        return totalMinutes + ((overlapEnd - overlapStart) / 60000);
+    }, 0);
+}
+
 // Function to format sleep sessions
-function formatSleepSessions(sleepSessionsByDate) {
+function formatSleepSessions(sleepSessionsByDate, breastfeedingOverlapIntervals) {
     let formattedSessions = "";
     const dates = Object.keys(sleepSessionsByDate).sort();
 
     dates.forEach(date => {
         formattedSessions += `${date}\n`;
+        let totalSleepMinutes = 0;
+        let totalOverlapMinutes = 0;
         
         sleepSessionsByDate[date].forEach(session => {
             const startTime = session.start.toLocaleTimeString("de-DE", { hour: '2-digit', minute: '2-digit' });
             const endTime = session.end.toLocaleTimeString("de-DE", { hour: '2-digit', minute: '2-digit' });
-            const durationMinutes = Math.round(session.duration * 60);
+            const durationMinutes = Math.round((session.end - session.start) / 60000);
+            const overlapMinutes = calculateOverlapMinutes(session.start, session.end, breastfeedingOverlapIntervals);
+
+            totalSleepMinutes += durationMinutes;
+            totalOverlapMinutes += overlapMinutes;
             
             formattedSessions += `${startTime} - ${endTime} (${formatDurationLabel(durationMinutes)})\n`;
         });
+
+        formattedSessions += `Summe Schlaf: ${formatDurationLabel(Math.round(totalSleepMinutes))}\n`;
+
+        if (totalOverlapMinutes > 0) {
+            const netSleepMinutes = Math.max(0, totalSleepMinutes - totalOverlapMinutes);
+            formattedSessions += `Schlaf ohne Stillzeit: ${formatDurationLabel(Math.round(netSleepMinutes))}\n`;
+        }
         
         formattedSessions += "\n";
     });
