@@ -1131,15 +1131,55 @@ function addSingleEvent(eventType) {
 }
 
 function addMedicineEvent() {
-    const medicine = prompt("What medicine was given?");
-    if (medicine !== null) {
-        addEventToData('MEDICINE', medicine);
-    }
+    openTextOverlay('MEDICINE', 'Medicine', 'What medicine was given?');
 }
 
 function addNoteEvent() {
-    const noteText = prompt("Enter your note:");
-    if (noteText !== null) {
-        addEventToData('NOTE', noteText);
+    openTextOverlay('NOTE', 'Note', 'Enter your note...');
+}
+
+function openTextOverlay(eventType, title, placeholder) {
+    const overlay = document.getElementById('textOverlay');
+    const titleEl = document.getElementById('overlayTitle');
+    const input = document.getElementById('overlayInput');
+
+    overlay.dataset.eventType = eventType;
+    titleEl.textContent = title;
+    input.placeholder = placeholder;
+    input.value = '';
+    overlay.classList.add('active');
+    overlay.setAttribute('aria-hidden', 'false');
+    setTimeout(() => input.focus(), 100);
+}
+
+function closeTextOverlay() {
+    const overlay = document.getElementById('textOverlay');
+    overlay.classList.remove('active');
+    overlay.setAttribute('aria-hidden', 'true');
+}
+
+function submitTextOverlay() {
+    const overlay = document.getElementById('textOverlay');
+    const eventType = overlay.dataset.eventType;
+    const notes = document.getElementById('overlayInput').value.trim();
+
+    if (!notes) {
+        alert('Please enter some text before saving.');
+        return;
+    }
+
+    addEventToData(eventType, notes);
+    closeTextOverlay();
+}
+
+function overlayBackgroundClick(event) {
+    if (event.target.id === 'textOverlay') {
+        closeTextOverlay();
     }
 }
+
+document.addEventListener('keydown', function(event) {
+    if (event.key === 'Escape') {
+        closeTextOverlay();
+    }
+});
