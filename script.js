@@ -1,11 +1,14 @@
 const DEFAULT_VISIBLE_DAY_COUNT = 7;
 let showAllDaysInCharts = false;
 let lastAnalyzedRawData = null;
+let lastAnalyzedData = null;
+let lastWebDavETag = null;
 let breastfeedingChartInstance = null;
 let breastfeedingTimesChartInstance = null;
 let dailyPatternsChartInstance = null;
 let sleepStatusChartInstance = null;
 let accumulatedSleepChartInstance = null;
+let activeEventType = null;
 
 function getVisibleDateKeys(dateKeys) {
     const sortedDates = [...dateKeys].sort((a, b) => parseDeDateString(a) - parseDeDateString(b));
@@ -89,6 +92,7 @@ function analyzeJson() {
 function processData(rawData, formattedTextDiv, tableBody, breastfeedingChartCtx, breastfeedingTimesChartCtx, sleepStatusChartCtx, accumulatedSleepChartCtx, formattedSleepTextDiv, sleepNotesTableBody) {
     try {
         const data = JSON.parse(rawData);
+        lastAnalyzedData = data;
         const normalizeString = (value) => String(value || "").trim().toLowerCase();
         const breastfeedingSessions = buildBreastfeedingSessions(data);
         const breastfeedingOverlapIntervals = buildBreastfeedingOverlapIntervals(data);
@@ -853,6 +857,7 @@ async function fetchFromNextcloud() {
         }
 
         const rawData = await response.text();
+        lastWebDavETag = response.headers.get("ETag");
 
         analyzeRawData(rawData);
 
@@ -879,3 +884,168 @@ document.addEventListener("DOMContentLoaded", function() {
         updateChartDayRange(showAllDaysToggle.checked);
     });
 });
+
+// ── Event tracking buttons (Sleep, Feeding Left, Feeding Right) ─────────────
+
+function toggleEventType(eventType) {
+    // Reset all buttons except the one that's being toggled
+    const btnSleep = document.getElementById("btnSleep");
+    const btnFeedingLeft = document.getElementById("btnFeedingLeft");
+    const btnFeedingRight = document.getElementById("btnFeedingRight");
+
+    // If the same button was clicked, create the end event and deactivate it
+    if (activeEventType === eventType) {
+        if (eventType === 'sleep') {
+            addEventToData('NOTE', 'wach');
+            btnSleep.classList.remove("active");
+        } else if (eventType === 'feeding_left') {
+            addEventToData('BREASTFEEDING_BOTH_NIPPLE', '');
+            btnFeedingLeft.classList.remove("active");
+        } else if (eventType === 'feeding_right') {
+            addEventToData('BREASTFEEDING_BOTH_NIPPLE', '');
+            btnFeedingRight.classList.remove("active");
+        }
+        activeEventType = null;
+        return;
+    }
+
+    // Deactivate all buttons and activate the new one
+    btnSleep.classList.remove("active");
+    btnFeedingLeft.classList.remove("active");
+    btnFeedingRight.classList.remove("active");
+
+    activeEventType = eventType;
+    if (eventType === 'sleep') {
+        btnSleep.classList.add("active");
+        addEventToData('NOTE', 'schläft');
+    } else if (eventType === 'feeding_left') {
+        btnFeedingLeft.classList.add("active");
+        addEventToData('BREASTFEEDING_LEFT_NIPPLE', '');
+    } else if (eventType === 'feeding_right') {
+        btnFeedingRight.classList.add("active");
+        addEventToData('BREASTFEEDING_RIGHT_NIPPLE', '');
+    }
+}
+
+function addEventToData(eventType, notes = "") {
+    if (!lastAnalyzedData) {
+        alert("Please load data first.");
+        return;
+    }
+
+    const now = new Date();
+    const event = {
+        time: Math.floor(now.getTime() / 1000),
+        type: eventType,
+        notes: notes
+    };
+
+    lastAnalyzedData.push(event);
+
+    // Update the data table with the new entry
+    const tableBody = document.getElementById("dataTable").getElementsByTagName("tbody")[0];
+    const row = tableBody.insertRow();
+    row.insertCell(0).textContent = now.toLocaleDateString("de-DE") + " " + now.toLocaleTimeString("de-DE", { hour: '2-digit', minute: '2-digit' });
+    row.insertCell(1).textContent = eventType;
+    row.insertCell(2).textContent = notes;
+
+    // Save to WebDAV
+    updateDataToWebDAV();
+}
+
+async function updateDataToWebDAV() {
+    const serverUrl = document.getElementById("webdavUrl").value.trim().replace(/\/+$/, "");
+    const username  = document.getElementById("webdavUsername").value.trim();
+    const password  = document.getElementById("webdavPassword").value;
+    const filePath  = document.getElementById("webdavFilePath").value.trim().replace(/^\/+/, "");
+
+    if (!serverUrl || !username || !password || !filePath) {
+        console.warn("WebDAV credentials not configured. Skipping remote save.");
+        return;
+    }
+
+    if (!serverUrl.startsWith("https://")) {
+        console.warn("WebDAV URL must be HTTPS. Skipping remote save.");
+        return;
+    }
+
+    const encodedFilePath = filePath.split("/").map(encodeURIComponent).join("/");
+    const webdavUrl = `${serverUrl}/remote.php/dav/files/${encodeURIComponent(username)}/${encodedFilePath}`;
+
+    const credentials = btoa(
+        unescape(encodeURIComponent(username)) + ":" + unescape(encodeURIComponent(password))
+    );
+
+    try {
+        // First, check if the file has been modified remotely
+        const headResponse = await fetch(webdavUrl, {
+            method: "HEAD",
+            credentials: "omit",
+            headers: {
+                "Authorization": `Basic ${credentials}`
+            }
+        });
+
+        if (!headResponse.ok) {
+            console.error("Failed to check remote file state:", headResponse.status);
+            return;
+        }
+
+        const remoteETag = headResponse.headers.get("ETag");
+
+        // Check for conflicts: if the ETag has changed, the file was modified remotely
+        if (lastWebDavETag && remoteETag && lastWebDavETag !== remoteETag) {
+            // Conflict detected: fetch and merge
+            console.warn("Remote file has been modified. Merging changes...");
+            
+            const getResponse = await fetch(webdavUrl, {
+                method: "GET",
+                credentials: "omit",
+                headers: {
+                    "Authorization": `Basic ${credentials}`
+                }
+            });
+
+            if (getResponse.ok) {
+                const remoteRawData = await getResponse.text();
+                const remoteData = JSON.parse(remoteRawData);
+                
+                // Merge: keep local events, add any remote events that are not in local
+                const localTimeSet = new Set(lastAnalyzedData.map(e => e.time));
+                remoteData.forEach(remoteEvent => {
+                    if (!localTimeSet.has(remoteEvent.time)) {
+                        lastAnalyzedData.push(remoteEvent);
+                    }
+                });
+                
+                // Sort by time
+                lastAnalyzedData.sort((a, b) => a.time - b.time);
+                lastWebDavETag = getResponse.headers.get("ETag");
+            }
+        }
+
+        // Now save the merged/updated data
+        const updatedRawData = JSON.stringify(lastAnalyzedData, null, 2);
+
+        const putResponse = await fetch(webdavUrl, {
+            method: "PUT",
+            credentials: "omit",
+            headers: {
+                "Authorization": `Basic ${credentials}`,
+                "Content-Type": "application/json"
+            },
+            body: updatedRawData
+        });
+
+        if (!putResponse.ok) {
+            console.error("Failed to save to WebDAV:", putResponse.status, putResponse.statusText);
+            return;
+        }
+
+        lastWebDavETag = putResponse.headers.get("ETag");
+        console.log("Data saved to WebDAV successfully.");
+
+    } catch (err) {
+        console.error("Error updating WebDAV:", err);
+    }
+}

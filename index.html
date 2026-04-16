@@ -313,6 +313,30 @@
             border: 1px solid #c6f6d5;
         }
 
+        .toggle-btn {
+            padding: 10px 20px;
+            font-size: 14px;
+            font-weight: 500;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            background: white;
+            color: #4a5568;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .toggle-btn:hover {
+            border-color: #667eea;
+            color: #667eea;
+        }
+
+        .toggle-btn.active {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        }
+
         .chart-range-controls {
             background: rgba(255, 255, 255, 0.95);
             border-radius: 12px;
@@ -452,6 +476,11 @@
 
         <div id="tableSection" class="content-section">
             <h2>📋 All Data Entries</h2>
+            <div style="margin-bottom: 20px; display: flex; gap: 10px; flex-wrap: wrap;">
+                <button id="btnSleep" class="toggle-btn" onclick="toggleEventType('sleep')">😴 Sleep</button>
+                <button id="btnFeedingLeft" class="toggle-btn" onclick="toggleEventType('feeding_left')">🍼 Feeding Left</button>
+                <button id="btnFeedingRight" class="toggle-btn" onclick="toggleEventType('feeding_right')">🍼 Feeding Right</button>
+            </div>
             <table id="dataTable">
                 <thead>
                     <tr>
