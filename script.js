@@ -610,7 +610,7 @@ function calculateOverlapMinutes(rangeStart, rangeEnd, intervals) {
 // Function to format sleep sessions
 function formatSleepSessions(sleepSessionsByDate, breastfeedingOverlapIntervals) {
     let formattedSessions = "";
-    const dates = Object.keys(sleepSessionsByDate).sort();
+    const dates = Object.keys(sleepSessionsByDate).sort((a, b) => parseDeDateString(a) - parseDeDateString(b));
 
     dates.forEach(date => {
         formattedSessions += `${date}\n`;
