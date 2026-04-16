@@ -24,6 +24,18 @@ function parseDeDateString(dateString) {
     return new Date(year, month - 1, day);
 }
 
+function getQuarterHourLabels() {
+    return Array.from({ length: 96 }, (_, i) => {
+        const hour = Math.floor(i / 4);
+        const minute = (i % 4) * 15;
+        return `${hour.toString().padStart(2, "0")}:${minute.toString().padStart(2, "0")}`;
+    });
+}
+
+function getQuarterHourIndex(date) {
+    return date.getHours() * 4 + Math.floor(date.getMinutes() / 15);
+}
+
 function updateChartDayRange(showAll) {
     showAllDaysInCharts = showAll;
 
@@ -87,13 +99,14 @@ function processData(rawData, formattedTextDiv, tableBody, breastfeedingChartCtx
 
         // Initialize data structures for charts
         const breastfeedingPerDay = {};
-        const breastfeedingPerHour = {};
-        const breastfeedingPerDayPerHour = {};
+        const breastfeedingPerInterval = {};
+        const breastfeedingPerDayPerInterval = {};
 
         data.forEach(item => {
             const date = new Date(item.time * 1000);
             const formattedDate = date.toLocaleDateString("de-DE");
             const hour = date.getHours();
+            const intervalIndex = getQuarterHourIndex(date);
             const itemType = normalizeString(item.type);
             const itemNotes = normalizeString(item.notes);
 
@@ -117,19 +130,19 @@ function processData(rawData, formattedTextDiv, tableBody, breastfeedingChartCtx
                 }
                 breastfeedingPerDay[formattedDate]++;
 
-                if (!breastfeedingPerHour[hour]) {
-                    breastfeedingPerHour[hour] = 0;
+                if (!breastfeedingPerInterval[intervalIndex]) {
+                    breastfeedingPerInterval[intervalIndex] = 0;
                 }
-                breastfeedingPerHour[hour]++;
+                breastfeedingPerInterval[intervalIndex]++;
 
-                // New data structure for daily hourly patterns
-                if (!breastfeedingPerDayPerHour[formattedDate]) {
-                    breastfeedingPerDayPerHour[formattedDate] = {};
+                // New data structure for daily 15-minute patterns
+                if (!breastfeedingPerDayPerInterval[formattedDate]) {
+                    breastfeedingPerDayPerInterval[formattedDate] = {};
                 }
-                if (!breastfeedingPerDayPerHour[formattedDate][hour]) {
-                    breastfeedingPerDayPerHour[formattedDate][hour] = 0;
+                if (!breastfeedingPerDayPerInterval[formattedDate][intervalIndex]) {
+                    breastfeedingPerDayPerInterval[formattedDate][intervalIndex] = 0;
                 }
-                breastfeedingPerDayPerHour[formattedDate][hour]++;
+                breastfeedingPerDayPerInterval[formattedDate][intervalIndex]++;
             }
         });
 
@@ -162,9 +175,9 @@ function processData(rawData, formattedTextDiv, tableBody, breastfeedingChartCtx
             }
         });
 
-        // Create Breastfeeding Times Chart (Occurrences per Hour - Aggregated)
-        const hours = Array.from({ length: 24 }, (_, i) => i); // 0 to 23 hours
-        const breastfeedingHourlyCounts = hours.map(hour => breastfeedingPerHour[hour] || 0);
+        // Create Breastfeeding Times Chart (Occurrences per 15-Minute Interval - Aggregated)
+        const quarterHourLabels = getQuarterHourLabels();
+        const breastfeedingIntervalCounts = quarterHourLabels.map((_, index) => breastfeedingPerInterval[index] || 0);
 
         if (breastfeedingTimesChartInstance) {
             breastfeedingTimesChartInstance.destroy();
@@ -172,10 +185,10 @@ function processData(rawData, formattedTextDiv, tableBody, breastfeedingChartCtx
         breastfeedingTimesChartInstance = new Chart(breastfeedingTimesChartCtx, {
             type: 'line',
             data: {
-                labels: hours.map(h => h + ":00"),
+                labels: quarterHourLabels,
                 datasets: [{
-                    label: 'Breastfeeding Occurrences per Hour (All Days)',
-                    data: breastfeedingHourlyCounts,
+                    label: 'Breastfeeding Occurrences per 15-Minute Interval (All Days)',
+                    data: breastfeedingIntervalCounts,
                     backgroundColor: 'rgba(153, 102, 255, 0.6)',
                     borderColor: 'rgba(153, 102, 255, 1)',
                     borderWidth: 1,
@@ -185,6 +198,13 @@ function processData(rawData, formattedTextDiv, tableBody, breastfeedingChartCtx
             options: {
                 responsive: true,
                 scales: {
+                    x: {
+                        ticks: {
+                            callback: function(value, index) {
+                                return index % 4 === 0 ? quarterHourLabels[index] : '';
+                            }
+                        }
+                    },
                     y: {
                         beginAtZero: true
                     }
@@ -194,7 +214,7 @@ function processData(rawData, formattedTextDiv, tableBody, breastfeedingChartCtx
 
         // Create Daily Breastfeeding Patterns Chart
         const dailyPatternsChartCtx = document.getElementById("dailyPatternsChart").getContext("2d");
-        const dates = getVisibleDateKeys(Object.keys(breastfeedingPerDayPerHour));
+        const dates = getVisibleDateKeys(Object.keys(breastfeedingPerDayPerInterval));
         const colors = [
             'rgba(255, 99, 132, 1)', 'rgba(54, 162, 235, 1)', 'rgba(255, 205, 86, 1)',
             'rgba(75, 192, 192, 1)', 'rgba(153, 102, 255, 1)', 'rgba(255, 159, 64, 1)',
@@ -204,10 +224,10 @@ function processData(rawData, formattedTextDiv, tableBody, breastfeedingChartCtx
         ];
 
         const datasets = dates.map((date, index) => {
-            const hourlyData = hours.map(hour => breastfeedingPerDayPerHour[date][hour] || 0);
+            const intervalData = quarterHourLabels.map((_, interval) => breastfeedingPerDayPerInterval[date][interval] || 0);
             return {
                 label: date,
-                data: hourlyData,
+                data: intervalData,
                 borderColor: colors[index % colors.length],
                 backgroundColor: colors[index % colors.length].replace('1)', '0.1)'),
                 borderWidth: 2,
@@ -222,7 +242,7 @@ function processData(rawData, formattedTextDiv, tableBody, breastfeedingChartCtx
         dailyPatternsChartInstance = new Chart(dailyPatternsChartCtx, {
             type: 'line',
             data: {
-                labels: hours.map(h => h + ":00"),
+                labels: quarterHourLabels,
                 datasets: datasets
             },
             options: {
@@ -230,7 +250,7 @@ function processData(rawData, formattedTextDiv, tableBody, breastfeedingChartCtx
                 plugins: {
                     title: {
                         display: true,
-                        text: 'Daily Breastfeeding Patterns (Occurrences per Hour by Day)'
+                        text: 'Daily Breastfeeding Patterns (Occurrences per 15-Minute Interval by Day)'
                     },
                     legend: {
                         display: true,
@@ -248,7 +268,12 @@ function processData(rawData, formattedTextDiv, tableBody, breastfeedingChartCtx
                     x: {
                         title: {
                             display: true,
-                            text: 'Hour of Day'
+                            text: 'Time of Day'
+                        },
+                        ticks: {
+                            callback: function(value, index) {
+                                return index % 4 === 0 ? quarterHourLabels[index] : '';
+                            }
                         }
                     }
                 },
@@ -303,30 +328,25 @@ function processData(rawData, formattedTextDiv, tableBody, breastfeedingChartCtx
             }
         });
 
-        // Create Sleep Status Chart (Sleep/Awake per Hour by Day)
+        // Create Sleep Status Chart (Sleep/Awake per 15-Minute Interval by Day)
         const sleepDates = getVisibleDateKeys(Object.keys(sleepSessionsByDate));
         
         const sleepDatasets = sleepDates.map((date, index) => {
-            const hourlyData = Array(24).fill(0);
+            const intervalData = Array(96).fill(0);
             
             sleepSessionsByDate[date].forEach(session => {
                 const startDate = new Date(session.start);
                 const endDate = new Date(session.end);
-                
-                let currentHour = startDate.getHours();
-                const endHour = endDate.getHours();
-                
-                // Mark hours when sleeping
-                if (startDate.getDate() === endDate.getDate()) {
-                    // All within same day
-                    for (let h = currentHour; h <= endHour; h++) {
-                        hourlyData[h] = 1;
-                    }
-                } else {
-                    // Sleep spans across days
-                    for (let h = currentHour; h < 24; h++) {
-                        hourlyData[h] = 1;
-                    }
+                const dayStart = new Date(endDate);
+                dayStart.setHours(0, 0, 0, 0);
+
+                const sessionStart = startDate < dayStart ? dayStart : startDate;
+                const sessionEnd = endDate;
+                const startInterval = getQuarterHourIndex(sessionStart);
+                const endInterval = getQuarterHourIndex(new Date(sessionEnd.getTime() - 1));
+
+                for (let i = startInterval; i <= endInterval && i < 96; i++) {
+                    intervalData[i] = 1;
                 }
             });
             
@@ -339,7 +359,7 @@ function processData(rawData, formattedTextDiv, tableBody, breastfeedingChartCtx
             
             return {
                 label: date,
-                data: hourlyData,
+                data: intervalData,
                 borderColor: colors[index % colors.length],
                 backgroundColor: colors[index % colors.length].replace('1)', '0.3)'),
                 borderWidth: 2,
@@ -355,7 +375,7 @@ function processData(rawData, formattedTextDiv, tableBody, breastfeedingChartCtx
         sleepStatusChartInstance = new Chart(sleepStatusChartCtx, {
             type: 'line',
             data: {
-                labels: hours.map(h => h + ":00"),
+                labels: quarterHourLabels,
                 datasets: sleepDatasets
             },
             options: {
@@ -382,7 +402,12 @@ function processData(rawData, formattedTextDiv, tableBody, breastfeedingChartCtx
                     x: {
                         title: {
                             display: true,
-                            text: 'Hour of Day'
+                            text: 'Time of Day'
+                        },
+                        ticks: {
+                            callback: function(value, index) {
+                                return index % 4 === 0 ? quarterHourLabels[index] : '';
+                            }
                         }
                     }
                 }
