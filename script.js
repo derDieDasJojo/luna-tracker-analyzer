@@ -65,6 +65,9 @@ function analyzeRawData(rawData) {
     lastAnalyzedRawData = rawData;
 
     processData(rawData, formattedTextDiv, tableBody, breastfeedingChartCtx, breastfeedingTimesChartCtx, sleepStatusChartCtx, accumulatedSleepChartCtx, formattedSleepTextDiv, sleepNotesTableBody);
+    
+    // Update button states based on unclosed events
+    updateButtonStates();
 }
 
 function analyzeJson() {
@@ -885,6 +888,71 @@ document.addEventListener("DOMContentLoaded", function() {
 });
 
 // ── Event tracking buttons (Sleep, Feeding Left, Feeding Right) ─────────────
+
+function updateButtonStates() {
+    if (!lastAnalyzedData || lastAnalyzedData.length === 0) {
+        return;
+    }
+
+    const btnSleep = document.getElementById("btnSleep");
+    const btnFeedingLeft = document.getElementById("btnFeedingLeft");
+    const btnFeedingRight = document.getElementById("btnFeedingRight");
+
+    // Reset all buttons
+    btnSleep.classList.remove("active");
+    btnFeedingLeft.classList.remove("active");
+    btnFeedingRight.classList.remove("active");
+
+    // Check for unclosed sleep event (newest first)
+    let sleepIsActive = false;
+    for (let i = 0; i < lastAnalyzedData.length; i++) {
+        const event = lastAnalyzedData[i];
+        const normalizedType = String(event.type || "").trim().toLowerCase();
+        const normalizedNotes = String(event.notes || "").trim().toLowerCase();
+
+        if (normalizedType === "note" && (normalizedNotes === "schläft" || normalizedNotes === "schlaeft")) {
+            sleepIsActive = true;
+            break;
+        } else if (normalizedType === "note" && normalizedNotes === "wach") {
+            // Found end event first, so sleep is not active
+            break;
+        }
+    }
+    if (sleepIsActive) {
+        btnSleep.classList.add("active");
+    }
+
+    // Check for unclosed feeding events (newest first)
+    let feedingLeftActive = false;
+    let feedingRightActive = false;
+    
+    for (let i = 0; i < lastAnalyzedData.length; i++) {
+        const event = lastAnalyzedData[i];
+        const eventType = event.type || "";
+
+        if (!feedingLeftActive && !feedingRightActive) {
+            // Look for start events
+            if (eventType === "BREASTFEEDING_LEFT_NIPPLE") {
+                feedingLeftActive = true;
+                break;
+            } else if (eventType === "BREASTFEEDING_RIGHT_NIPPLE") {
+                feedingRightActive = true;
+                break;
+            }
+        }
+
+        // Stop if we find an end event
+        if (eventType === "BREASTFEEDING_BOTH_NIPPLE") {
+            break;
+        }
+    }
+
+    if (feedingLeftActive) {
+        btnFeedingLeft.classList.add("active");
+    } else if (feedingRightActive) {
+        btnFeedingRight.classList.add("active");
+    }
+}
 
 function toggleEventType(eventType) {
     const btnSleep = document.getElementById("btnSleep");
