@@ -1125,3 +1125,21 @@ async function updateDataToWebDAV() {
         console.error("Error updating WebDAV:", err);
     }
 }
+
+function addSingleEvent(eventType) {
+    addEventToData(eventType, '');
+}
+
+function addMedicineEvent() {
+    const medicine = prompt("What medicine was given?");
+    if (medicine !== null) {
+        addEventToData('MEDICINE', medicine);
+    }
+}
+
+function addNoteEvent() {
+    const noteText = prompt("Enter your note:");
+    if (noteText !== null) {
+        addEventToData('NOTE', noteText);
+    }
+}
