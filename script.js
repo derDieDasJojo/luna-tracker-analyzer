@@ -8,7 +8,6 @@ let breastfeedingTimesChartInstance = null;
 let dailyPatternsChartInstance = null;
 let sleepStatusChartInstance = null;
 let accumulatedSleepChartInstance = null;
-let activeEventType = null;
 
 function getVisibleDateKeys(dateKeys) {
     const sortedDates = [...dateKeys].sort((a, b) => parseDeDateString(a) - parseDeDateString(b));
@@ -888,42 +887,50 @@ document.addEventListener("DOMContentLoaded", function() {
 // ── Event tracking buttons (Sleep, Feeding Left, Feeding Right) ─────────────
 
 function toggleEventType(eventType) {
-    // Reset all buttons except the one that's being toggled
     const btnSleep = document.getElementById("btnSleep");
     const btnFeedingLeft = document.getElementById("btnFeedingLeft");
     const btnFeedingRight = document.getElementById("btnFeedingRight");
 
-    // If the same button was clicked, create the end event and deactivate it
-    if (activeEventType === eventType) {
-        if (eventType === 'sleep') {
+    if (eventType === 'sleep') {
+        // Toggle sleep independently - doesn't affect feeding buttons
+        const sleepActive = btnSleep.classList.contains("active");
+        if (sleepActive) {
+            // Deactivate sleep and create end event
             addEventToData('NOTE', 'wach');
             btnSleep.classList.remove("active");
-        } else if (eventType === 'feeding_left') {
+        } else {
+            // Activate sleep
+            btnSleep.classList.add("active");
+            addEventToData('NOTE', 'schläft');
+        }
+    } else if (eventType === 'feeding_left') {
+        // Toggle feeding left - deactivates feeding right
+        const feedingLeftActive = btnFeedingLeft.classList.contains("active");
+        if (feedingLeftActive) {
+            // Deactivate feeding left and create end event
             addEventToData('BREASTFEEDING_BOTH_NIPPLE', '');
             btnFeedingLeft.classList.remove("active");
-        } else if (eventType === 'feeding_right') {
+        } else {
+            // Deactivate feeding right first
+            btnFeedingRight.classList.remove("active");
+            // Activate feeding left (sleep remains unchanged)
+            btnFeedingLeft.classList.add("active");
+            addEventToData('BREASTFEEDING_LEFT_NIPPLE', '');
+        }
+    } else if (eventType === 'feeding_right') {
+        // Toggle feeding right - deactivates feeding left
+        const feedingRightActive = btnFeedingRight.classList.contains("active");
+        if (feedingRightActive) {
+            // Deactivate feeding right and create end event
             addEventToData('BREASTFEEDING_BOTH_NIPPLE', '');
             btnFeedingRight.classList.remove("active");
+        } else {
+            // Deactivate feeding left first
+            btnFeedingLeft.classList.remove("active");
+            // Activate feeding right (sleep remains unchanged)
+            btnFeedingRight.classList.add("active");
+            addEventToData('BREASTFEEDING_RIGHT_NIPPLE', '');
         }
-        activeEventType = null;
-        return;
-    }
-
-    // Deactivate all buttons and activate the new one
-    btnSleep.classList.remove("active");
-    btnFeedingLeft.classList.remove("active");
-    btnFeedingRight.classList.remove("active");
-
-    activeEventType = eventType;
-    if (eventType === 'sleep') {
-        btnSleep.classList.add("active");
-        addEventToData('NOTE', 'schläft');
-    } else if (eventType === 'feeding_left') {
-        btnFeedingLeft.classList.add("active");
-        addEventToData('BREASTFEEDING_LEFT_NIPPLE', '');
-    } else if (eventType === 'feeding_right') {
-        btnFeedingRight.classList.add("active");
-        addEventToData('BREASTFEEDING_RIGHT_NIPPLE', '');
     }
 }
 
@@ -940,11 +947,12 @@ function addEventToData(eventType, notes = "") {
         notes: notes
     };
 
-    lastAnalyzedData.push(event);
+    // Add to beginning of array (newest entries first)
+    lastAnalyzedData.unshift(event);
 
-    // Update the data table with the new entry
+    // Update the data table with the new entry (add to beginning)
     const tableBody = document.getElementById("dataTable").getElementsByTagName("tbody")[0];
-    const row = tableBody.insertRow();
+    const row = tableBody.insertRow(0);
     row.insertCell(0).textContent = now.toLocaleDateString("de-DE") + " " + now.toLocaleTimeString("de-DE", { hour: '2-digit', minute: '2-digit' });
     row.insertCell(1).textContent = eventType;
     row.insertCell(2).textContent = notes;
@@ -1018,8 +1026,8 @@ async function updateDataToWebDAV() {
                     }
                 });
                 
-                // Sort by time
-                lastAnalyzedData.sort((a, b) => a.time - b.time);
+                // Sort by time (newest first)
+                lastAnalyzedData.sort((a, b) => b.time - a.time);
                 lastWebDavETag = getResponse.headers.get("ETag");
             }
         }
