@@ -781,14 +781,21 @@ async function loadWebDavCredentials() {
     document.getElementById("webdavFilePath").value = filePath;
     document.getElementById("webdavRemember").checked = true;
 
+    let passwordLoaded = false;
     if (encPwd && encKey && encIv) {
         try {
             const password = await decryptPassword(encPwd, encKey, encIv);
             document.getElementById("webdavPassword").value = password;
+            passwordLoaded = true;
         } catch (err) {
             // Decryption failed (e.g. storage was tampered with) – leave field empty
             console.error("WebDAV: failed to decrypt stored password:", err);
         }
+    }
+
+    // If all credentials are loaded, automatically fetch from Nextcloud
+    if (url && username && filePath && passwordLoaded) {
+        fetchFromNextcloud();
     }
 }
 
